@@ -1,4 +1,4 @@
-import { ADVICE, LEVELS, adviceFor, fr } from './advice.js';
+import { ADVICE, LEVELS, TYPES, adviceFor, fr } from './advice.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -15,7 +15,7 @@ const store = {
 
 const state = {
   breaches: [], countries: {}, news: [], byId: new Map(),
-  levels: new Set(Object.keys(LEVELS)), period: 0,
+  levels: new Set(Object.keys(LEVELS)), types: new Set(Object.keys(TYPES)), period: 0,
   q: '', country: '', dataclass: '', sort: 'added', shown: PAGE,
   watch: store.get('br-watch', []), newsFilter: 'all',
 };
@@ -32,7 +32,11 @@ breaches.forEach((b) => state.byId.set(b.id, b));
 function inPeriod(b) {
   return !state.period || Date.now() - Date.parse(b.addedDate) <= state.period * DAY;
 }
-const visible = () => state.breaches.filter((b) => state.levels.has(b.level) && inPeriod(b));
+const visible = () => state.breaches.filter((b) => state.levels.has(b.level) && state.types.has(b.type) && inPeriod(b));
+// Volume affiché : les rançongiciels et certaines notifications n'en publient pas.
+const volume = (b, long = false) => (b.count == null ? (b.size ? `${b.size} revendiqués` : 'Volume inconnu')
+  : long ? `${nf.format(b.count)} ${b.countLabel || 'comptes'}` : `${compact.format(b.count)} ${b.type === 'officiel' ? 'pers. (WA)' : 'comptes'}`);
+const sumCount = (list) => list.reduce((s, b) => s + (b.count || 0), 0);
 
 function isWatched(b) {
   const hay = `${b.domain || ''} ${b.title}`.toLowerCase();
@@ -44,13 +48,14 @@ function renderHeader() {
   const mins = Math.round((Date.now() - Date.parse(meta.generatedAt)) / 60000);
   const ago = mins < 60 ? `${mins} min` : mins < 1440 ? `${Math.round(mins / 60)} h` : `${Math.round(mins / 1440)} j`;
   $('#updated').textContent = `Mis à jour il y a ${ago}`;
-  const recent = breaches.filter((b) => Date.now() - Date.parse(b.addedDate) <= 30 * DAY).length;
   const crit = breaches.filter((b) => b.level === 'critique').length;
+  const t = meta.byType;
   $('#stats').innerHTML = [
     [nf.format(meta.breaches), `fuites sur ${meta.windowMonths} mois`],
-    [compact.format(meta.accounts), 'comptes exposés'],
     [nf.format(crit), 'fuites critiques', 'crit'],
-    [nf.format(recent), 'ajoutées ces 30 jours'],
+    [nf.format(t.hibp), `fuites confirmées · ${compact.format(sumCount(breaches.filter((b) => b.type === 'hibp')))} comptes`],
+    [nf.format(t.ransomware), 'victimes de rançongiciels'],
+    [nf.format(t.officiel), 'notifications officielles'],
   ].map(([v, l, c = '']) => `<div class="stat ${c}"><b>${v}</b><span>${l}</span></div>`).join('');
 }
 
@@ -64,6 +69,17 @@ $('#level-chips').addEventListener('click', (e) => {
   if (!btn) return;
   const k = btn.dataset.level;
   if (state.levels.has(k) && state.levels.size > 1) state.levels.delete(k); else state.levels.add(k);
+  refresh();
+});
+function renderTypeChips() {
+  $('#type-chips').innerHTML = Object.entries(TYPES).map(([k, v]) =>
+    `<button class="chip" data-type="${k}" aria-pressed="${state.types.has(k)}"><i class="t-${k}"></i>${v.label}</button>`).join('');
+}
+$('#type-chips').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-type]');
+  if (!btn) return;
+  const k = btn.dataset.type;
+  if (state.types.has(k) && state.types.size > 1) state.types.delete(k); else state.types.add(k);
   refresh();
 });
 $('#period').addEventListener('change', (e) => { state.period = Number(e.target.value); refresh(); });
@@ -90,16 +106,16 @@ function renderMap(list) {
     const c = state.countries[code];
     items.sort((a, b) => b.score - a.score);
     const worst = items[0].level;
-    const accounts = items.reduce((s, b) => s + b.count, 0);
     const marker = L.circleMarker([c.lat, c.lng], {
-      radius: 6 + Math.sqrt(items.length) * 3.2, color: LEVEL_COLORS[worst], weight: 2,
+      radius: Math.min(40, 5 + Math.sqrt(items.length) * 2.2), color: LEVEL_COLORS[worst], weight: 2,
       fillColor: LEVEL_COLORS[worst], fillOpacity: 0.35,
     }).addTo(layer);
     marker.bindTooltip(`${esc(c.name)} — ${items.length} fuite(s)`);
     marker.bindPopup(() => {
       const el = document.createElement('div');
       el.innerHTML = `<h4>${esc(c.name)}</h4>
-        <p class="note" style="margin:0 0 8px">${items.length} fuite(s) · ${compact.format(accounts)} comptes</p>
+        <p class="note" style="margin:0 0 8px">${Object.entries(TYPES).map(([k, v]) => [items.filter((b) => b.type === k).length, v.label.toLowerCase()])
+          .filter(([n]) => n).map(([n, l]) => `${n} ${l}`).join(' · ')}</p>
         <ul class="pop-list">${items.slice(0, 6).map((b) =>
           `<li><span class="score lvl-${b.level}">${b.score}</span><button data-open="${esc(b.id)}">${esc(b.title)}</button></li>`).join('')}</ul>
         <button class="ghost" data-country="${code}">Voir les ${items.length} fuites →</button>`;
@@ -122,7 +138,7 @@ function renderLatest(list) {
   const top = list.filter((b) => b.level === 'critique' || b.level === 'eleve').slice(0, 15);
   $('#latest').innerHTML = top.map((b) => `<li><button data-open="${esc(b.id)}">
       <span class="score lvl-${b.level}">${b.score}</span><span class="t">${esc(b.title)}</span>
-      <span class="s">Ajoutée le ${dateFr(b.addedDate)} · ${compact.format(b.count)} comptes</span></button></li>`).join('')
+      <span class="s">${TYPES[b.type].short} · ${dateFr(b.addedDate)} · ${volume(b)}</span></button></li>`).join('')
     || '<li class="note">Aucune fuite pour ces filtres.</li>';
 }
 
@@ -144,10 +160,10 @@ function card(b) {
   const classes = [...b.classes].sort((x, y) => HOT.has(y) - HOT.has(x));
   const country = b.country && state.countries[b.country] ? state.countries[b.country].name : 'Non localisé';
   return `<button class="card lvl-${b.level}${isWatched(b) ? ' watched' : ''}" data-open="${esc(b.id)}">
-    <div class="card-top">${logo(b)}<div><h3>${esc(b.title)}</h3><div class="dom">${esc(b.domain || '—')}</div></div>
+    <div class="card-top">${logo(b)}<div><h3>${esc(b.title)}</h3><div class="dom">${esc(b.domain || (b.group ? `Groupe ${b.group}` : b.authorities ? `Notifiée : ${b.authorities.join(', ')}` : '—'))}</div></div>
       <span class="score lvl-${b.level}" title="Score de criticité">${b.score}</span></div>
-    <div class="meta"><span class="badge lvl-${b.level}">${LEVELS[b.level].label}</span><span>${compact.format(b.count)} comptes</span>
-      <span>Fuite : ${dateFr(b.breachDate)}</span><span>${esc(country)}</span></div>
+    <div class="meta"><span class="badge lvl-${b.level}">${LEVELS[b.level].label}</span><span class="src-tag t-${b.type}">${TYPES[b.type].short}</span>
+      <span>${volume(b)}</span><span>${dateFr(b.addedDate)}</span><span>${esc(country)}</span></div>
     <div class="pills">${classes.slice(0, 5).map((c) => `<span class="pill${HOT.has(c) ? ' hot' : ''}">${esc(fr(c))}</span>`).join('')}
       ${classes.length > 5 ? `<span class="pill">+${classes.length - 5}</span>` : ''}</div>
   </button>`;
@@ -161,8 +177,8 @@ function filteredList() {
     && (!state.dataclass || b.classes.includes(state.dataclass)));
   const sorters = {
     added: (a, b) => b.addedDate.localeCompare(a.addedDate),
-    score: (a, b) => b.score - a.score || b.count - a.count,
-    count: (a, b) => b.count - a.count,
+    score: (a, b) => b.score - a.score || (b.count || 0) - (a.count || 0),
+    count: (a, b) => (b.count ?? -1) - (a.count ?? -1),
     date: (a, b) => b.breachDate.localeCompare(a.breachDate),
   };
   return list.sort(sorters[state.sort]);
@@ -170,7 +186,7 @@ function filteredList() {
 
 function renderList() {
   const list = filteredList();
-  $('#result-count').textContent = `${nf.format(list.length)} fuite(s) · ${compact.format(list.reduce((s, b) => s + b.count, 0))} comptes`;
+  $('#result-count').textContent = `${nf.format(list.length)} fuite(s) · ${compact.format(sumCount(list))} comptes ou personnes connus`;
   $('#list').innerHTML = list.slice(0, state.shown).map(card).join('') || '<p class="note">Aucun résultat.</p>';
   $('#more').hidden = list.length <= state.shown;
 }
@@ -218,17 +234,21 @@ function openBreach(id) {
       <div><div class="badge lvl-${b.level}" style="font-size:14px;margin-bottom:6px">Criticité : ${lv.label}</div>
         <ul class="factors">${b.factors.map((f) => `<li><span>${esc(f.label.replace(/^(Donnée la plus sensible : )(.+)$/, (m, p, c) => p + fr(c)))}</span><span>${f.points > 0 ? '+' : ''}${f.points}</span></li>`).join('')}</ul></div>
     </div>
-    <div class="meta"><span><b>${nf.format(b.count)}</b> comptes</span><span>Fuite : ${dateFr(b.breachDate)}</span>
-      <span>Rendue publique : ${dateFr(b.addedDate)}</span><span>${esc(country)}</span>
+    ${b.type === 'ransomware' ? `<p class="warn">⚠ Revendication du groupe <b>${esc(b.group)}</b> sur son site de fuite : elle n’est pas confirmée par la victime et ne précise pas toujours les données volées.</p>` : ''}
+    <div class="meta"><span class="src-tag t-${b.type}">${TYPES[b.type].short}</span><span><b>${volume(b, true)}</b></span>
+      <span>${b.type === 'ransomware' ? 'Revendiquée' : 'Fuite'} : ${dateFr(b.breachDate)}</span>
+      ${b.type === 'ransomware' ? '' : `<span>Rendue publique : ${dateFr(b.addedDate)}</span>`}<span>${esc(country)}</span>
+      ${b.sector ? `<span>Secteur : ${esc(b.sector)}</span>` : ''}
       <span>${b.verified ? '✔ Vérifiée' : '⚠ Non vérifiée'}</span></div>
-    <div class="m-section"><h3>Données exposées</h3>
+    <div class="m-section"><h3>${b.type === 'hibp' ? 'Données exposées' : 'Nature de la fuite'}</h3>
       <div class="pills">${b.classes.map((c) => `<span class="pill${HOT.has(c) ? ' hot' : ''}">${esc(fr(c))}</span>`).join('')}</div></div>
     <div class="m-section"><h3>Que faire si vous êtes concerné ?</h3>
       <div class="m-actions">${advice.map((a) => adviceBlock(a)).join('') || '<p class="note">Restez vigilant face au phishing.</p>'}</div></div>
-    <div class="m-section"><h3>Description (source HIBP, en anglais)</h3><p class="m-desc">${esc(b.description)}</p>
+    <div class="m-section"><h3>Description (source ${esc(TYPES[b.type].source)}${b.type === 'officiel' ? '' : ', en anglais'})</h3>
+      <p class="m-desc">${esc(b.description || 'Aucune description publiée.')}</p>
       <div class="links">
-        <a href="https://haveibeenpwned.com/Breach/${encodeURIComponent(b.id)}" target="_blank" rel="noopener">Fiche Have I Been Pwned ↗</a>
-        ${b.disclosureUrl ? `<a href="${esc(b.disclosureUrl)}" target="_blank" rel="noopener">Communiqué officiel ↗</a>` : ''}
+        ${b.type === 'hibp' ? `<a href="https://haveibeenpwned.com/Breach/${encodeURIComponent(b.id)}" target="_blank" rel="noopener">Fiche Have I Been Pwned ↗</a>` : ''}
+        ${b.disclosureUrl ? `<a href="${esc(b.disclosureUrl)}" target="_blank" rel="noopener">${{ hibp: 'Communiqué officiel', ransomware: `Groupe ${esc(b.group)} sur RansomLook`, officiel: 'Registre officiel' }[b.type]} ↗</a>` : ''}
         <a href="https://haveibeenpwned.com/" target="_blank" rel="noopener">Vérifier mon e-mail ↗</a>
       </div></div>`;
   const dlg = $('#modal');
@@ -329,6 +349,7 @@ $('#news-chips').addEventListener('click', (e) => {
 function refresh() {
   const list = visible();
   renderLevelChips();
+  renderTypeChips();
   renderMap(list);
   renderLatest([...list].sort((a, b) => b.addedDate.localeCompare(a.addedDate)));
   state.shown = PAGE;

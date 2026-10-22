@@ -29,6 +29,14 @@ export const CLASS_FR = {
   'Audio recordings': 'Enregistrements audio', 'Partial dates of birth': 'Dates de naissance partielles', 'Ages': 'Âges',
   'Occupations': 'Professions', 'Customer service records': 'Échanges service client', 'Payment methods': 'Moyens de paiement',
   'Recovery email addresses': 'E-mails de récupération', 'Login histories': 'Historiques de connexion',
+  'Ransomware claim': 'Données internes volées (revendication)', 'Official notification': 'Notification officielle',
+  'Health sector': 'Secteur santé', 'Financial sector': 'Secteur financier',
+};
+
+export const TYPES = {
+  hibp: { label: 'Fuites confirmées', short: 'Fuite confirmée', source: 'Have I Been Pwned' },
+  ransomware: { label: 'Rançongiciels', short: 'Rançongiciel', source: 'RansomLook' },
+  officiel: { label: 'Notifications officielles', short: 'Notification officielle', source: 'Procureurs généraux (CA, WA)' },
 };
 export const fr = (c) => CLASS_FR[c] || c;
 
@@ -68,7 +76,7 @@ export const ADVICE = [
   },
   {
     id: 'iban', priority: 2, icon: '🏦', title: 'Coordonnées bancaires (IBAN) exposées',
-    match: ['Bank account numbers', 'Account balances', 'Financial transactions', 'Loan information', 'Financial investments'],
+    match: ['Financial sector', 'Bank account numbers', 'Account balances', 'Financial transactions', 'Loan information', 'Financial investments'],
     urgency: 'Sous 24 h',
     steps: [
       'Prévenez votre banque et demandez la liste des mandats de prélèvement SEPA actifs.',
@@ -116,7 +124,7 @@ export const ADVICE = [
   },
   {
     id: 'sante', priority: 2, icon: '🩺', title: 'Données de santé exposées',
-    match: ['Personal health data', 'Health insurance information', 'HIV statuses'],
+    match: ['Health sector', 'Personal health data', 'Health insurance information', 'HIV statuses'],
     urgency: 'Sous 72 h',
     steps: [
       'Ne répondez à aucune tentative de chantage : ne payez pas, conservez les preuves et portez plainte.',
@@ -135,6 +143,31 @@ export const ADVICE = [
       'Faites le point sur les informations partagées dans ces échanges (mots de passe, documents...).',
     ],
     links: [L.pharos, L.cyber17],
+  },
+  {
+    id: 'rancon', priority: 2, icon: '🏴‍☠️', title: 'Entreprise victime d’un rançongiciel',
+    match: ['Ransomware claim'],
+    urgency: 'Vigilance',
+    steps: [
+      'Si vous êtes client, patient, salarié ou fournisseur, vos données peuvent figurer dans les fichiers volés.',
+      'Changez le mot de passe de votre compte chez cette organisation et partout où vous l’avez réutilisé.',
+      'Attendez-vous à des e-mails ou appels frauduleux qui se font passer pour elle (fausses factures, faux changement d’IBAN).',
+      'Surveillez les courriers officiels de l’organisation : elle doit vous informer si vos données sont touchées.',
+      'Ne téléchargez jamais les données publiées par les pirates : c’est illégal et souvent piégé.',
+    ],
+    links: [L.cyber, L.cyber17],
+  },
+  {
+    id: 'officiel', priority: 2, icon: '🏛️', title: 'Fuite notifiée aux autorités',
+    match: ['Official notification'],
+    urgency: 'Sous 48 h',
+    steps: [
+      'Lisez la lettre de notification envoyée par l’organisation : elle précise les données touchées.',
+      'Activez les services de surveillance gratuits proposés dans la lettre (surveillance de crédit, d’identité).',
+      'Aux États-Unis, un gel de crédit (credit freeze) gratuit auprès des 3 bureaux de crédit bloque l’ouverture de comptes à votre nom.',
+      'Vérifiez vos relevés bancaires et de remboursements santé des prochains mois.',
+    ],
+    links: [{ label: 'Gel de crédit (FTC)', url: 'https://consumer.ftc.gov/articles/what-know-about-credit-freezes-fraud-alerts' }, L.cyber],
   },
   {
     id: 'contact', priority: 3, icon: '📱', title: 'Téléphone et adresse postale exposés',

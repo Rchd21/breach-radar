@@ -33,7 +33,7 @@
   <main>
     <section class="hero">
       <h1>Les fuites de données du monde entier, <em>en direct</em>.</h1>
-      <p>Toutes les fuites rendues publiques ces 6 derniers mois, notées de 0 à 100 selon la sensibilité des données, le volume et la récence. Repérez celles qui vous concernent et suivez les bons réflexes.</p>
+      <p>Fuites confirmées, victimes de rançongiciels et notifications officielles des 6 derniers mois, notées de 0 à 100 selon la sensibilité des données, le volume et la récence. Repérez celles qui vous concernent et suivez les bons réflexes.</p>
       <div id="watch-alert" class="watch-alert" hidden></div>
       <div class="stats" id="stats"></div>
     </section>
@@ -49,6 +49,7 @@
             <option value="0" selected>6 derniers mois</option>
           </select>
           <div class="chips" id="level-chips"></div>
+          <div class="chips" id="type-chips"></div>
         </div>
       </div>
       <div class="map-wrap">
@@ -144,12 +145,12 @@
   <footer>
     <div>
       <h4>Méthode du score (0-100)</h4>
-      <p>Sensibilité de la donnée la plus critique exposée (jusqu’à 50) + volume de comptes (jusqu’à 25) + récence (jusqu’à 15) ± indicateurs (logiciel espion, fuite sensible, non vérifiée, fabriquée). <b>Critique</b> ≥ 75 · <b>Élevé</b> ≥ 55 · <b>Modéré</b> ≥ 35 · <b>Faible</b> &lt; 35.</p>
+      <p>Sensibilité de la donnée la plus critique exposée (jusqu’à 50) + volume de comptes (jusqu’à 25) + récence (jusqu’à 15) ± indicateurs (logiciel espion, fuite sensible, non vérifiée, fabriquée). Sans détail des données (rançongiciels, notifications), la sensibilité est estimée d’après le secteur et le volume d’après la taille annoncée ou le nombre de personnes notifiées. <b>Critique</b> ≥ 75 · <b>Élevé</b> ≥ 55 · <b>Modéré</b> ≥ 35 · <b>Faible</b> &lt; 35.</p>
       <p>Localisation : estimée à partir du domaine et de la description ; certaines fuites ne sont pas localisables.</p>
     </div>
     <div>
       <h4>Sources</h4>
-      <p>Fuites : <a href="https://haveibeenpwned.com/" target="_blank" rel="noopener">Have I Been Pwned</a> (licence CC BY 4.0). Actualités : DataBreaches.net, ZATAZ, BleepingComputer, The Hacker News, The Register, CERT-FR. Fenêtre glissante des 6 derniers mois (date de publication de la fuite), mise à jour automatiquement toutes les 3 heures.</p>
+      <p>Fuites confirmées : <a href="https://haveibeenpwned.com/" target="_blank" rel="noopener">Have I Been Pwned</a> (CC BY 4.0). Rançongiciels : <a href="https://www.ransomlook.io/" target="_blank" rel="noopener">RansomLook</a> (revendications non confirmées, aucun lien vers les sites criminels). Notifications officielles : procureurs généraux de <a href="https://oag.ca.gov/privacy/databreach/list" target="_blank" rel="noopener">Californie</a> et de <a href="https://data.wa.gov/" target="_blank" rel="noopener">Washington</a>. Actualités : DataBreaches.net, ZATAZ, BleepingComputer, The Hacker News, The Register, CERT-FR. Fenêtre glissante des 6 derniers mois (date de publication de la fuite), mise à jour automatiquement toutes les 3 heures.</p>
       <p>Ce site n’héberge aucune donnée personnelle issue des fuites.</p>
     </div>
   </footer>
