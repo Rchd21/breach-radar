@@ -1,12 +1,16 @@
-import { ADVICE, LEVELS, TYPES, adviceFor, fr } from './advice.js';
+import { LEVELS, TYPES, adviceFor } from './advice.js';
+import { T, allAdvice, applyStatic, cls, countryName, factorLabel, lang, locale, localAdvice, setLang, stateNames } from './i18n.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const nf = new Intl.NumberFormat('fr-FR');
-const compact = new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 });
-const dateFr = (d) => new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+const nf = new Intl.NumberFormat(locale);
+const compact = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 });
+const fmtDate = (d) => new Date(d).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
 const DAY = 86400000;
 const PAGE = 24;
+
+applyStatic();
+$('#lang-switch').addEventListener('click', () => setLang(lang === 'fr' ? 'en' : 'fr'));
 
 const store = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
@@ -25,7 +29,7 @@ const [breaches, countries, news, meta] = await Promise.all(
 );
 state.breaches = breaches;
 state.news = news;
-countries.forEach((c) => { state.countries[c.code] = c; });
+countries.forEach((c) => { state.countries[c.code] = { ...c, name: countryName(c.code) }; });
 breaches.forEach((b) => state.byId.set(b.id, b));
 
 /* ---------- Filtres communs ---------- */
@@ -34,9 +38,16 @@ function inPeriod(b) {
 }
 const visible = () => state.breaches.filter((b) => state.levels.has(b.level) && state.types.has(b.type) && inPeriod(b));
 // Volume affiché : les rançongiciels et certaines notifications n'en publient pas.
-const volume = (b, long = false) => (b.count == null ? (b.size ? `${b.size} revendiqués` : 'Volume inconnu')
-  : long ? `${nf.format(b.count)} ${b.countLabel || 'comptes'}` : `${compact.format(b.count)} ${b.type === 'officiel' ? 'pers. (WA)' : 'comptes'}`);
+const volume = (b, long = false) => {
+  if (b.count == null) return b.size ? T.volClaimed(b.size) : T.volUnknown;
+  if (b.type === 'officiel') return long ? `${nf.format(b.count)} ${T.peopleWaLong}` : `${compact.format(b.count)} ${T.peopleWa}`;
+  return `${(long ? nf : compact).format(b.count)} ${T.accounts}`;
+};
 const sumCount = (list) => list.reduce((s, b) => s + (b.count || 0), 0);
+const typeLabel = (k) => T.types[k][0];
+const typeShort = (k) => T.types[k][1];
+const countryOf = (b) => (b.country && state.countries[b.country] ? state.countries[b.country].name : T.notLocated);
+const descriptionOf = (b) => (b.type === 'officiel' ? T.offDesc(stateNames(b.authorities), b.attackType) : b.description);
 
 function isWatched(b) {
   const hay = `${b.domain || ''} ${b.title}`.toLowerCase();
@@ -46,23 +57,23 @@ function isWatched(b) {
 /* ---------- En-tête et statistiques ---------- */
 function renderHeader() {
   const mins = Math.round((Date.now() - Date.parse(meta.generatedAt)) / 60000);
-  const ago = mins < 60 ? `${mins} min` : mins < 1440 ? `${Math.round(mins / 60)} h` : `${Math.round(mins / 1440)} j`;
-  $('#updated').textContent = `Mis à jour il y a ${ago}`;
+  const ago = mins < 60 ? `${mins} ${T.ago.min}` : mins < 1440 ? `${Math.round(mins / 60)} ${T.ago.h}` : `${Math.round(mins / 1440)} ${T.ago.d}`;
+  $('#updated').textContent = T.updated(ago);
   const crit = breaches.filter((b) => b.level === 'critique').length;
   const t = meta.byType;
   $('#stats').innerHTML = [
-    [nf.format(meta.breaches), `fuites sur ${meta.windowMonths} mois`],
-    [nf.format(crit), 'fuites critiques', 'crit'],
-    [nf.format(t.hibp), `fuites confirmées · ${compact.format(sumCount(breaches.filter((b) => b.type === 'hibp')))} comptes`],
-    [nf.format(t.ransomware), 'victimes de rançongiciels'],
-    [nf.format(t.officiel), 'notifications officielles'],
-  ].map(([v, l, c = '']) => `<div class="stat ${c}"><b>${v}</b><span>${l}</span></div>`).join('');
+    [nf.format(meta.breaches), T.statWindow(meta.windowMonths)],
+    [nf.format(crit), T.statCrit, 'crit'],
+    [nf.format(t.hibp), T.statConfirmed(compact.format(sumCount(breaches.filter((b) => b.type === 'hibp'))))],
+    [nf.format(t.ransomware), T.statRansom],
+    [nf.format(t.officiel), T.statOfficial],
+  ].map(([v, l, c = '']) => `<div class="stat ${c}"><b>${v}</b><span>${esc(l)}</span></div>`).join('');
 }
 
-/* ---------- Chips de niveau ---------- */
+/* ---------- Chips de niveau et de type ---------- */
 function renderLevelChips() {
   $('#level-chips').innerHTML = Object.entries(LEVELS).map(([k, v]) =>
-    `<button class="chip" data-level="${k}" aria-pressed="${state.levels.has(k)}"><i style="background:${v.color}"></i>${v.label}</button>`).join('');
+    `<button class="chip" data-level="${k}" aria-pressed="${state.levels.has(k)}"><i style="background:${v.color}"></i>${T.levels[k]}</button>`).join('');
 }
 $('#level-chips').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-level]');
@@ -72,8 +83,8 @@ $('#level-chips').addEventListener('click', (e) => {
   refresh();
 });
 function renderTypeChips() {
-  $('#type-chips').innerHTML = Object.entries(TYPES).map(([k, v]) =>
-    `<button class="chip" data-type="${k}" aria-pressed="${state.types.has(k)}"><i class="t-${k}"></i>${v.label}</button>`).join('');
+  $('#type-chips').innerHTML = Object.keys(TYPES).map((k) =>
+    `<button class="chip" data-type="${k}" aria-pressed="${state.types.has(k)}"><i class="t-${k}"></i>${typeLabel(k)}</button>`).join('');
 }
 $('#type-chips').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-type]');
@@ -110,15 +121,15 @@ function renderMap(list) {
       radius: Math.min(40, 5 + Math.sqrt(items.length) * 2.2), color: LEVEL_COLORS[worst], weight: 2,
       fillColor: LEVEL_COLORS[worst], fillOpacity: 0.35,
     }).addTo(layer);
-    marker.bindTooltip(`${esc(c.name)} — ${items.length} fuite(s)`);
+    marker.bindTooltip(`${esc(c.name)} — ${items.length}`);
     marker.bindPopup(() => {
       const el = document.createElement('div');
       el.innerHTML = `<h4>${esc(c.name)}</h4>
-        <p class="note" style="margin:0 0 8px">${Object.entries(TYPES).map(([k, v]) => [items.filter((b) => b.type === k).length, v.label.toLowerCase()])
+        <p class="note" style="margin:0 0 8px">${Object.keys(TYPES).map((k) => [items.filter((b) => b.type === k).length, typeLabel(k).toLowerCase()])
           .filter(([n]) => n).map(([n, l]) => `${n} ${l}`).join(' · ')}</p>
         <ul class="pop-list">${items.slice(0, 6).map((b) =>
           `<li><span class="score lvl-${b.level}">${b.score}</span><button data-open="${esc(b.id)}">${esc(b.title)}</button></li>`).join('')}</ul>
-        <button class="ghost" data-country="${code}">Voir les ${items.length} fuites →</button>`;
+        <button class="ghost" data-country="${code}">${T.seeAll(items.length)}</button>`;
       el.addEventListener('click', (e) => {
         const open = e.target.closest('[data-open]');
         if (open) openBreach(open.dataset.open);
@@ -130,16 +141,15 @@ function renderMap(list) {
       return el;
     });
   }
-  const located = list.filter((b) => b.country).length;
-  $('#map-note').textContent = `${nf.format(located)} fuites localisées sur ${nf.format(list.length)} affichées. La localisation est estimée (domaine national, siège connu ou description) ; les autres restent consultables dans la liste.`;
+  $('#map-note').textContent = T.mapNote(nf.format(list.filter((b) => b.country).length), nf.format(list.length));
 }
 
 function renderLatest(list) {
   const top = list.filter((b) => b.level === 'critique' || b.level === 'eleve').slice(0, 15);
   $('#latest').innerHTML = top.map((b) => `<li><button data-open="${esc(b.id)}">
       <span class="score lvl-${b.level}">${b.score}</span><span class="t">${esc(b.title)}</span>
-      <span class="s">${TYPES[b.type].short} · ${dateFr(b.addedDate)} · ${volume(b)}</span></button></li>`).join('')
-    || '<li class="note">Aucune fuite pour ces filtres.</li>';
+      <span class="s">${typeShort(b.type)} · ${fmtDate(b.addedDate)} · ${volume(b)}</span></button></li>`).join('')
+    || `<li class="note">${T.noneForFilters}</li>`;
 }
 
 /* ---------- Liste ---------- */
@@ -156,15 +166,21 @@ document.addEventListener('error', (e) => {
 }, true);
 const HOT = new Set(['Passwords', 'Credit cards', 'Credit card CVV', 'Bank account numbers', 'Government issued IDs', 'Social security numbers', 'Passport numbers', 'Personal health data', 'Mnemonic phrases', 'Auth tokens', 'Private messages']);
 
+function subtitle(b) {
+  if (b.domain) return b.domain;
+  if (b.group) return T.group(b.group);
+  if (b.authorities) return T.notifiedTo(b.authorities.join(', '));
+  return '—';
+}
+
 function card(b) {
   const classes = [...b.classes].sort((x, y) => HOT.has(y) - HOT.has(x));
-  const country = b.country && state.countries[b.country] ? state.countries[b.country].name : 'Non localisé';
   return `<button class="card lvl-${b.level}${isWatched(b) ? ' watched' : ''}" data-open="${esc(b.id)}">
-    <div class="card-top">${logo(b)}<div><h3>${esc(b.title)}</h3><div class="dom">${esc(b.domain || (b.group ? `Groupe ${b.group}` : b.authorities ? `Notifiée : ${b.authorities.join(', ')}` : '—'))}</div></div>
-      <span class="score lvl-${b.level}" title="Score de criticité">${b.score}</span></div>
-    <div class="meta"><span class="badge lvl-${b.level}">${LEVELS[b.level].label}</span><span class="src-tag t-${b.type}">${TYPES[b.type].short}</span>
-      <span>${volume(b)}</span><span>${dateFr(b.addedDate)}</span><span>${esc(country)}</span></div>
-    <div class="pills">${classes.slice(0, 5).map((c) => `<span class="pill${HOT.has(c) ? ' hot' : ''}">${esc(fr(c))}</span>`).join('')}
+    <div class="card-top">${logo(b)}<div><h3>${esc(b.title)}</h3><div class="dom">${esc(subtitle(b))}</div></div>
+      <span class="score lvl-${b.level}">${b.score}</span></div>
+    <div class="meta"><span class="badge lvl-${b.level}">${T.levels[b.level]}</span><span class="src-tag t-${b.type}">${typeShort(b.type)}</span>
+      <span>${volume(b)}</span><span>${fmtDate(b.addedDate)}</span><span>${esc(countryOf(b))}</span></div>
+    <div class="pills">${classes.slice(0, 5).map((c) => `<span class="pill${HOT.has(c) ? ' hot' : ''}">${esc(cls(c))}</span>`).join('')}
       ${classes.length > 5 ? `<span class="pill">+${classes.length - 5}</span>` : ''}</div>
   </button>`;
 }
@@ -186,8 +202,8 @@ function filteredList() {
 
 function renderList() {
   const list = filteredList();
-  $('#result-count').textContent = `${nf.format(list.length)} fuite(s) · ${compact.format(sumCount(list))} comptes ou personnes connus`;
-  $('#list').innerHTML = list.slice(0, state.shown).map(card).join('') || '<p class="note">Aucun résultat.</p>';
+  $('#result-count').textContent = T.resultCount(nf.format(list.length), compact.format(sumCount(list)));
+  $('#list').innerHTML = list.slice(0, state.shown).map(card).join('') || `<p class="note">${T.noResults}</p>`;
   $('#more').hidden = list.length <= state.shown;
 }
 
@@ -195,14 +211,14 @@ function fillSelects() {
   const counts = {};
   breaches.forEach((b) => { if (b.country) counts[b.country] = (counts[b.country] || 0) + 1; });
   $('#country').insertAdjacentHTML('beforeend', Object.entries(counts)
-    .sort((a, b) => state.countries[a[0]].name.localeCompare(state.countries[b[0]].name, 'fr'))
+    .sort((a, b) => state.countries[a[0]].name.localeCompare(state.countries[b[0]].name, locale))
     .map(([c, n]) => `<option value="${c}">${esc(state.countries[c].name)} (${n})</option>`).join('')
-    + '<option value="_none">Non localisé</option>');
+    + `<option value="_none">${T.notLocated}</option>`);
   const dc = {};
   breaches.forEach((b) => b.classes.forEach((c) => { dc[c] = (dc[c] || 0) + 1; }));
   $('#dataclass').insertAdjacentHTML('beforeend', Object.entries(dc).filter(([, n]) => n >= 5)
-    .sort((a, b) => fr(a[0]).localeCompare(fr(b[0]), 'fr'))
-    .map(([c, n]) => `<option value="${esc(c)}">${esc(fr(c))} (${n})</option>`).join(''));
+    .sort((a, b) => cls(a[0]).localeCompare(cls(b[0]), locale))
+    .map(([c, n]) => `<option value="${esc(c)}">${esc(cls(c))} (${n})</option>`).join(''));
 }
 
 let qTimer;
@@ -215,7 +231,7 @@ $('#more').addEventListener('click', () => { state.shown += PAGE; renderList(); 
 /* ---------- Modale de détail ---------- */
 function adviceBlock(a, tag = 'h4') {
   return `<div class="advice"><${tag}>${a.icon} ${esc(a.title)}</${tag}>
-    <span class="urgency${a.urgency === 'Immédiat' ? ' now' : ''}">${esc(a.urgency)}</span>
+    <span class="urgency${a.urgent ? ' now' : ''}">${esc(a.urgency)}</span>
     <ol>${a.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
     <div class="links">${a.links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)} ↗</a>`).join('')}</div></div>`;
 }
@@ -223,44 +239,42 @@ function adviceBlock(a, tag = 'h4') {
 function openBreach(id) {
   const b = state.byId.get(id);
   if (!b) return;
-  const lv = LEVELS[b.level];
-  const country = b.country ? `${state.countries[b.country]?.name || b.country} (estimation : ${b.countrySource})` : 'Non localisé';
-  const advice = adviceFor(b.classes);
+  const country = b.country ? `${countryOf(b)} (${T.estimation(T.countrySources[b.countrySource] || b.countrySource)})` : T.notLocated;
+  const advice = adviceFor(b.classes).map(localAdvice);
+  const description = descriptionOf(b);
+  const disclosure = T.disclosure[b.type];
   $('#modal-body').innerHTML = `
     <div class="m-head">${logo(b)}<div><h2 id="m-title">${esc(b.title)}</h2><div class="note">${esc(b.domain || '')}</div></div>
-      <button class="close" data-close aria-label="Fermer">✕</button></div>
+      <button class="close" data-close aria-label="${T.close}">✕</button></div>
     <div class="gauge lvl-${b.level}">
       <div class="ring" style="--v:${b.score}"><div><span><b>${b.score}</b><br>/100</span></div></div>
-      <div><div class="badge lvl-${b.level}" style="font-size:14px;margin-bottom:6px">Criticité : ${lv.label}</div>
-        <ul class="factors">${b.factors.map((f) => `<li><span>${esc(f.label.replace(/^(Donnée la plus sensible : )(.+)$/, (m, p, c) => p + fr(c)))}</span><span>${f.points > 0 ? '+' : ''}${f.points}</span></li>`).join('')}</ul></div>
+      <div><div class="badge lvl-${b.level}" style="font-size:14px;margin-bottom:6px">${T.criticality(T.levels[b.level])}</div>
+        <ul class="factors">${b.factors.map((f) => `<li><span>${esc(factorLabel(f))}</span><span>${f.points > 0 ? '+' : ''}${f.points}</span></li>`).join('')}</ul></div>
     </div>
-    ${b.type === 'ransomware' ? `<p class="warn">⚠ Revendication du groupe <b>${esc(b.group)}</b> sur son site de fuite : elle n’est pas confirmée par la victime et ne précise pas toujours les données volées.</p>` : ''}
-    <div class="meta"><span class="src-tag t-${b.type}">${TYPES[b.type].short}</span><span><b>${volume(b, true)}</b></span>
-      <span>${b.type === 'ransomware' ? 'Revendiquée' : 'Fuite'} : ${dateFr(b.breachDate)}</span>
-      ${b.type === 'ransomware' ? '' : `<span>Rendue publique : ${dateFr(b.addedDate)}</span>`}<span>${esc(country)}</span>
-      ${b.sector ? `<span>Secteur : ${esc(b.sector)}</span>` : ''}
-      <span>${b.verified ? '✔ Vérifiée' : '⚠ Non vérifiée'}</span></div>
-    <div class="m-section"><h3>${b.type === 'hibp' ? 'Données exposées' : 'Nature de la fuite'}</h3>
-      <div class="pills">${b.classes.map((c) => `<span class="pill${HOT.has(c) ? ' hot' : ''}">${esc(fr(c))}</span>`).join('')}</div></div>
-    <div class="m-section"><h3>Que faire si vous êtes concerné ?</h3>
-      <div class="m-actions">${advice.map((a) => adviceBlock(a)).join('') || '<p class="note">Restez vigilant face au phishing.</p>'}</div></div>
-    <div class="m-section"><h3>Description (source ${esc(TYPES[b.type].source)}${b.type === 'officiel' ? '' : ', en anglais'})</h3>
-      <p class="m-desc">${esc(b.description || 'Aucune description publiée.')}</p>
+    ${b.type === 'ransomware' ? `<p class="warn">${T.warnRansom(esc(b.group))}</p>` : ''}
+    <div class="meta"><span class="src-tag t-${b.type}">${typeShort(b.type)}</span><span><b>${volume(b, true)}</b></span>
+      <span>${b.type === 'ransomware' ? T.claimedOn : T.breachOn}${fmtDate(b.breachDate)}</span>
+      ${b.type === 'ransomware' ? '' : `<span>${T.publishedOn}${fmtDate(b.addedDate)}</span>`}<span>${esc(country)}</span>
+      ${b.sector ? `<span>${T.sector}${esc(T.sectors[b.sector] || b.sector)}</span>` : ''}
+      <span>${b.verified ? T.verified : T.unverified}</span></div>
+    <div class="m-section"><h3>${b.type === 'hibp' ? T.exposedData : T.natureOfBreach}</h3>
+      <div class="pills">${b.classes.map((c) => `<span class="pill${HOT.has(c) ? ' hot' : ''}">${esc(cls(c))}</span>`).join('')}</div></div>
+    <div class="m-section"><h3>${T.whatToDo}</h3>
+      <div class="m-actions">${advice.map((a) => adviceBlock(a)).join('') || `<p class="note">${T.beVigilant}</p>`}</div></div>
+    <div class="m-section"><h3>${esc(T.descTitle(T.typeSources[b.type], b.type !== 'officiel'))}</h3>
+      <p class="m-desc">${esc(description || T.noDesc)}</p>
       <div class="links">
-        ${b.type === 'hibp' ? `<a href="https://haveibeenpwned.com/Breach/${encodeURIComponent(b.id)}" target="_blank" rel="noopener">Fiche Have I Been Pwned ↗</a>` : ''}
-        ${b.disclosureUrl ? `<a href="${esc(b.disclosureUrl)}" target="_blank" rel="noopener">${{ hibp: 'Communiqué officiel', ransomware: `Groupe ${esc(b.group)} sur RansomLook`, officiel: 'Registre officiel' }[b.type]} ↗</a>` : ''}
-        <a href="https://haveibeenpwned.com/" target="_blank" rel="noopener">Vérifier mon e-mail ↗</a>
+        ${b.type === 'hibp' ? `<a href="https://haveibeenpwned.com/Breach/${encodeURIComponent(b.id)}" target="_blank" rel="noopener">${T.hibpPage} ↗</a>` : ''}
+        ${b.disclosureUrl ? `<a href="${esc(b.disclosureUrl)}" target="_blank" rel="noopener">${esc(typeof disclosure === 'function' ? disclosure(b.group) : disclosure)} ↗</a>` : ''}
+        <a href="https://haveibeenpwned.com/" target="_blank" rel="noopener">${T.checkEmail} ↗</a>
       </div></div>`;
   const dlg = $('#modal');
   if (!dlg.open) dlg.showModal();
   dlg.scrollTop = 0;
-  history.replaceState(null, '', `#fuite=${encodeURIComponent(id)}`);
+  history.replaceState(null, '', `${location.search}#fuite=${encodeURIComponent(id)}`);
 }
-function closeModal() {
-  $('#modal').close();
-}
-$('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal' || e.target.closest('[data-close]')) closeModal(); });
-$('#modal').addEventListener('close', () => { if (location.hash.startsWith('#fuite=')) history.replaceState(null, '', location.pathname); });
+$('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal' || e.target.closest('[data-close]')) $('#modal').close(); });
+$('#modal').addEventListener('close', () => { if (location.hash.startsWith('#fuite=')) history.replaceState(null, '', location.pathname + location.search); });
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-open]');
   if (el && !el.closest('.leaflet-popup')) openBreach(el.dataset.open);
@@ -274,19 +288,19 @@ window.addEventListener('hashchange', openFromHash);
 /* ---------- Surveillance de services ---------- */
 function renderWatch() {
   $('#watch-tags').innerHTML = state.watch.map((w) =>
-    `<span class="tag">${esc(w)}<button data-unwatch="${esc(w)}" aria-label="Retirer ${esc(w)}">✕</button></span>`).join('');
+    `<span class="tag">${esc(w)}<button data-unwatch="${esc(w)}" aria-label="${esc(T.remove(w))}">✕</button></span>`).join('');
   const hits = state.breaches.filter(isWatched).sort((a, b) => b.addedDate.localeCompare(a.addedDate));
   $('#watch-results').innerHTML = state.watch.length
     ? hits.map((b) => `<li><span class="score lvl-${b.level}">${b.score}</span><button data-open="${esc(b.id)}">${esc(b.title)}</button>
-        <span class="note" style="margin-left:auto">${dateFr(b.breachDate)}</span></li>`).join('') || '<li class="note">Aucune fuite connue pour ces services. 👍</li>'
+        <span class="note" style="margin-left:auto">${fmtDate(b.breachDate)}</span></li>`).join('') || `<li class="note">${T.noneKnown}</li>`
     : '';
   const recent = hits.filter((b) => Date.now() - Date.parse(b.addedDate) <= 90 * DAY);
   const alert = $('#watch-alert');
   alert.hidden = !recent.length;
   if (recent.length) {
-    alert.innerHTML = `<span style="font-size:22px">🚨</span><div><b>${recent.length} fuite(s) récente(s) touchent vos services</b><br>
+    alert.innerHTML = `<span style="font-size:22px">🚨</span><div><b>${T.watchAlert(recent.length)}</b><br>
       <span class="note">${recent.slice(0, 3).map((b) => esc(b.title)).join(', ')}</span></div>
-      <button data-open="${esc(recent[0].id)}">Que faire ?</button>`;
+      <button data-open="${esc(recent[0].id)}">${T.whatToDoBtn}</button>`;
   }
 }
 $('#watch-form').addEventListener('submit', (e) => {
@@ -310,7 +324,7 @@ $('#pwd-form').addEventListener('submit', async (e) => {
   const out = $('#pwd-result');
   const pwd = $('#pwd').value;
   if (!pwd) return;
-  out.className = 'pwd-result'; out.textContent = 'Vérification…';
+  out.className = 'pwd-result'; out.textContent = T.checking;
   try {
     const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(pwd));
     const hash = [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase();
@@ -318,27 +332,27 @@ $('#pwd-form').addEventListener('submit', async (e) => {
     const text = await res.text();
     const line = text.split('\n').find((l) => l.startsWith(hash.slice(5)));
     const n = line ? Number(line.split(':')[1]) : 0;
-    if (n > 0) { out.classList.add('bad'); out.textContent = `⚠ Ce mot de passe apparaît ${nf.format(n)} fois dans des fuites. Changez-le partout où il est utilisé.`; }
-    else { out.classList.add('ok'); out.textContent = '✔ Ce mot de passe n’apparaît dans aucune fuite connue.'; }
+    if (n > 0) { out.classList.add('bad'); out.textContent = T.pwdFound(nf.format(n)); }
+    else { out.classList.add('ok'); out.textContent = T.pwdNotFound; }
   } catch {
-    out.textContent = 'Service de vérification indisponible, réessayez plus tard.';
+    out.textContent = T.pwdError;
   }
   $('#pwd').value = '';
 });
 
 /* ---------- Guides et actualités ---------- */
-$('#advice').innerHTML = ADVICE.map((a) => adviceBlock(a, 'h3')).join('');
+$('#advice').innerHTML = allAdvice().map((a) => adviceBlock(a, 'h3')).join('');
 
-const NEWS_FILTERS = { all: 'Tout', alert: 'Alertes CERT-FR', fr: 'En français', en: 'En anglais' };
+const NEWS_FILTERS = { all: T.newsAll, alert: T.newsAlert, fr: T.newsFr, en: T.newsEn };
 function renderNews() {
   $('#news-chips').innerHTML = Object.entries(NEWS_FILTERS).map(([k, v]) =>
     `<button class="chip" data-news="${k}" aria-pressed="${state.newsFilter === k}">${v}</button>`).join('');
   const f = state.newsFilter;
   const items = state.news.filter((n) => f === 'all' || (f === 'alert' ? n.alert : n.lang === f && !n.alert)).slice(0, 30);
   $('#news').innerHTML = items.map((n) => `<li class="${n.alert ? 'alert' : ''}">
-      <div class="src"><b>${esc(n.source)}</b><span>${new Date(n.date).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</span></div>
+      <div class="src"><b>${esc(n.source)}</b><span>${new Date(n.date).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })}</span></div>
       <a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.title)}</a>
-      ${n.summary ? `<p>${esc(n.summary)}</p>` : ''}</li>`).join('') || '<li class="note">Aucune actualité.</li>';
+      ${n.summary ? `<p>${esc(n.summary)}</p>` : ''}</li>`).join('') || `<li class="note">${T.noNews}</li>`;
 }
 $('#news-chips').addEventListener('click', (e) => {
   const b = e.target.closest('[data-news]');

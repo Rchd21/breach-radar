@@ -116,7 +116,7 @@ async function buildRansomware() {
       breachDate: date.toISOString().slice(0, 10),
       addedDate: date.toISOString(),
       count: null,
-      size: factors.find((f) => f.label.startsWith('Volume annoncé'))?.label.split(' : ')[1] || null,
+      size: factors.find((f) => f.k === 'rwSize')?.v || null,
       classes: ['Ransomware claim', ...(sector ? [`${sector} sector`] : [])],
       description: description === title ? '' : description,
       disclosureUrl: `https://www.ransomlook.io/group/${encodeURIComponent(p.group_name)}`,
@@ -165,12 +165,12 @@ async function buildOfficial() {
     const key = orgKey(name);
     const prev = byOrg.get(key);
     if (prev && prev.addedDay >= addedDay) continue;
-    byOrg.set(key, { name: name.trim(), addedDay, breachDay: usDate(breachDates) || addedDay, states: ['Californie'] });
+    byOrg.set(key, { name: name.trim(), addedDay, breachDay: usDate(breachDates) || addedDay, states: ['CA'] });
   }
   for (const r of wa) {
     const key = orgKey(r.name);
     const rec = byOrg.get(key) || { name: r.name.trim(), addedDay: r.datesubmitted.slice(0, 10), breachDay: (r.datestart || r.datesubmitted).slice(0, 10), states: [] };
-    rec.states.push('Washington');
+    rec.states.push('WA');
     rec.count = Math.max(rec.count || 0, Number(r.washingtoniansaffected) || 0) || null;
     rec.sector = r.industrytype;
     rec.attackType = r.cyberattacktype || r.databreachcause;
@@ -191,13 +191,12 @@ async function buildOfficial() {
       breachDate: r.breachDay,
       addedDate: `${r.addedDay}T12:00:00Z`,
       count: r.count || null,
-      countLabel: r.count ? 'résidents de l’État de Washington touchés (minimum)' : null,
       classes,
       authorities: r.states,
       sector: r.sector || null,
       attackType: r.attackType || null,
-      description: `Fuite notifiée au procureur général de ${r.states.join(' et de ')}${r.attackType ? ` (cause déclarée : ${r.attackType})` : ''}.`,
-      disclosureUrl: r.states.includes('Californie')
+      description: '', // rédigée dans la langue du visiteur à partir de authorities/attackType
+      disclosureUrl: r.states.includes('CA')
         ? `https://oag.ca.gov/privacy/databreach/list?field_sb24_org_name_value=${encodeURIComponent(r.name)}`
         : 'https://www.atg.wa.gov/data-breach-notifications',
       verified: true,

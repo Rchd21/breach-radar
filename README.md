@@ -10,6 +10,8 @@ Site public de suivi des fuites de données mondiales rendues publiques sur les 
 - **Actualités en direct** : DataBreaches.net, ZATAZ, BleepingComputer, The Hacker News, The Register, alertes CERT-FR.
 - **Flux RSS** `feed.xml` des fuites critiques et élevées.
 
+Site **bilingue français / anglais** (bouton FR/EN, détection automatique de la langue du navigateur, lien direct `?lang=en`).
+
 Site 100 % statique, sans dépendance npm, sans clé d’API, sans base de données.
 
 ## Lancer en local
@@ -47,7 +49,7 @@ Autres hébergeurs (Netlify, Cloudflare Pages, Vercel) : commande de build `node
 scripts/fetch-data.mjs     collecte HIBP, RansomLook, CA, WA + flux RSS → public/data/*.json, public/feed.xml
 scripts/lib/score.mjs      calcul du score de criticité
 scripts/lib/countries.mjs  localisation (siège connu, domaine national, description)
-public/                    le site (index.html, assets/)
+public/                    le site (index.html, assets/ ; traductions dans assets/i18n.js)
 ```
 
 ## Méthode
