@@ -149,8 +149,23 @@ $('#period').addEventListener('change', (e) => { state.period = Number(e.target.
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const map = L.map('map', { minZoom: 1.5, maxZoom: 7, zoomSnap: 0.5, maxBounds: [[-75, -200], [88, 200]] }).setView([28, 10], 2);
 map.attributionControl.setPrefix(false).addAttribution('Natural Earth · Leaflet');
+// Les contours qui franchissent la ligne de changement de date (Russie, Fidji) passent de +180° à -180° :
+// Leaflet les relie par un trait horizontal traversant toute la carte. On décale ces anneaux de +360°.
+function unwrapAntimeridian(feature) {
+  const g = feature.geometry;
+  const polygons = g.type === 'Polygon' ? [g.coordinates] : g.coordinates;
+  for (const polygon of polygons) {
+    for (const ring of polygon) {
+      if (!ring.some((p, i) => i && Math.abs(p[0] - ring[i - 1][0]) > 180)) continue;
+      for (const p of ring) if (p[0] < 0) p[0] += 360;
+    }
+  }
+  return feature;
+}
 fetch('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json').then((r) => r.json()).then((topo) => {
-  L.geoJSON(topojson.feature(topo, topo.objects.countries), {
+  const world = topojson.feature(topo, topo.objects.countries);
+  world.features = world.features.filter((f) => f.id !== '010').map(unwrapAntimeridian); // sans l'Antarctique
+  L.geoJSON(world, {
     interactive: false,
     style: { color: cssVar('--border-strong'), weight: 0.6, fillColor: cssVar('--surface'), fillOpacity: 1 },
   }).addTo(map).bringToBack();
