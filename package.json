@@ -1,0 +1,13 @@
+{
+  "name": "breach-radar",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Suivi en direct des fuites de données mondiales : score de criticité, carte, conseils d'action.",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "fetch": "node scripts/fetch-data.mjs",
+    "serve": "node scripts/serve.mjs",
+    "dev": "node scripts/fetch-data.mjs && node scripts/serve.mjs"
+  }
+}

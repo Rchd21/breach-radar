@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Breach Radar — fuites de données en direct</title>
+  <meta name="description" content="Suivi en direct des fuites de données dans le monde : score de criticité, carte des organisations touchées et conseils pour agir vite.">
+  <meta name="theme-color" content="#0b0f17">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%230b0f17' stroke='%23ef4444' stroke-width='3'/><circle cx='16' cy='16' r='4' fill='%23ef4444'/></svg>">
+  <link rel="alternate" type="application/rss+xml" title="Fuites critiques" href="feed.xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#">
+      <span class="radar" aria-hidden="true"></span>
+      <span>Breach<b>Radar</b></span>
+    </a>
+    <nav>
+      <a href="#carte">Carte</a>
+      <a href="#fuites">Fuites</a>
+      <a href="#concerne">Suis-je concerné ?</a>
+      <a href="#agir">Que faire ?</a>
+      <a href="#actus">Actualités</a>
+    </nav>
+    <span class="live"><i></i><span id="updated">Chargement…</span></span>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Les fuites de données du monde entier, <em>en direct</em>.</h1>
+      <p>Toutes les fuites rendues publiques ces 6 derniers mois, notées de 0 à 100 selon la sensibilité des données, le volume et la récence. Repérez celles qui vous concernent et suivez les bons réflexes.</p>
+      <div id="watch-alert" class="watch-alert" hidden></div>
+      <div class="stats" id="stats"></div>
+    </section>
+
+    <section id="carte" class="block">
+      <div class="block-head">
+        <h2>Carte mondiale des organisations touchées</h2>
+        <div class="filters" id="map-filters">
+          <select id="period" aria-label="Période">
+            <option value="7">7 derniers jours</option>
+            <option value="30">30 derniers jours</option>
+            <option value="91">3 derniers mois</option>
+            <option value="0" selected>6 derniers mois</option>
+          </select>
+          <div class="chips" id="level-chips"></div>
+        </div>
+      </div>
+      <div class="map-wrap">
+        <div id="map" role="region" aria-label="Carte des fuites"></div>
+        <aside class="side">
+          <h3>Dernières fuites critiques et élevées</h3>
+          <ol id="latest" class="latest"></ol>
+        </aside>
+      </div>
+      <p class="note" id="map-note"></p>
+    </section>
+
+    <section id="fuites" class="block">
+      <div class="block-head">
+        <h2>Fuites des 6 derniers mois</h2>
+        <div class="filters">
+          <input id="q" type="search" placeholder="Rechercher une entreprise, un domaine…" aria-label="Rechercher">
+          <select id="country" aria-label="Pays"><option value="">Tous les pays</option></select>
+          <select id="dataclass" aria-label="Type de donnée"><option value="">Toutes les données</option></select>
+          <select id="sort" aria-label="Tri">
+            <option value="added">Plus récemment ajoutées</option>
+            <option value="score">Score de criticité</option>
+            <option value="count">Nombre de comptes</option>
+            <option value="date">Date de la fuite</option>
+          </select>
+        </div>
+      </div>
+      <p class="result-count" id="result-count"></p>
+      <div class="grid" id="list"></div>
+      <button class="more" id="more" hidden>Afficher plus</button>
+    </section>
+
+    <section id="concerne" class="block">
+      <div class="block-head"><h2>Suis-je concerné ?</h2></div>
+      <div class="tools">
+        <article class="tool">
+          <h3>Mes services surveillés</h3>
+          <p>Ajoutez les sites que vous utilisez (ex. <code>deezer</code>, <code>free.fr</code>, <code>linkedin</code>). Vous serez alerté dès qu’une fuite les touche. Liste stockée uniquement dans votre navigateur.</p>
+          <form id="watch-form" class="inline-form">
+            <input id="watch-input" placeholder="Nom ou domaine du service" aria-label="Service à surveiller" autocomplete="off">
+            <button type="submit">Ajouter</button>
+          </form>
+          <div id="watch-tags" class="tags"></div>
+          <ul id="watch-results" class="watch-results"></ul>
+        </article>
+
+        <article class="tool">
+          <h3>Mon mot de passe a-t-il fuité ?</h3>
+          <p>Vérification anonyme : seuls les 5 premiers caractères de l’empreinte SHA-1 sont envoyés à Pwned Passwords (k-anonymat). Le mot de passe ne quitte jamais votre appareil.</p>
+          <form id="pwd-form" class="inline-form">
+            <input id="pwd" type="password" placeholder="Mot de passe à tester" aria-label="Mot de passe" autocomplete="off">
+            <button type="submit">Vérifier</button>
+          </form>
+          <p id="pwd-result" class="pwd-result" aria-live="polite"></p>
+        </article>
+
+        <article class="tool">
+          <h3>Mon adresse e-mail est-elle exposée ?</h3>
+          <p>La recherche par e-mail nécessite une vérification d’identité : utilisez ces services de référence, gratuits.</p>
+          <div class="btn-col">
+            <a class="btn" href="https://haveibeenpwned.com/" target="_blank" rel="noopener">Have I Been Pwned ↗</a>
+            <a class="btn ghost" href="https://monitor.mozilla.org/" target="_blank" rel="noopener">Mozilla Monitor ↗</a>
+          </div>
+          <p class="small">Abonnez-vous aussi au <a href="feed.xml">flux RSS des fuites critiques</a>.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="agir" class="block">
+      <div class="block-head"><h2>Que faire si je suis concerné ?</h2></div>
+      <div class="advice-grid" id="advice"></div>
+      <div class="hotlines">
+        <h3>Contacts utiles (France)</h3>
+        <ul>
+          <li><b>17Cyber</b> — assistance cyber en ligne, 24 h/24 : <a href="https://www.17cyber.gouv.fr/" target="_blank" rel="noopener">17cyber.gouv.fr</a></li>
+          <li><b>Opposition carte bancaire</b> — 0 892 705 705</li>
+          <li><b>Info Escroqueries</b> — 0 805 805 817 (gratuit)</li>
+          <li><b>SMS frauduleux</b> — transférer au 33700</li>
+          <li><b>CNIL</b> — <a href="https://www.cnil.fr/fr/plaintes" target="_blank" rel="noopener">déposer une plainte</a> si l’organisme ne vous a pas informé</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="actus" class="block">
+      <div class="block-head">
+        <h2>Actualités et alertes</h2>
+        <div class="chips" id="news-chips"></div>
+      </div>
+      <ul class="news" id="news"></ul>
+    </section>
+  </main>
+
+  <footer>
+    <div>
+      <h4>Méthode du score (0-100)</h4>
+      <p>Sensibilité de la donnée la plus critique exposée (jusqu’à 50) + volume de comptes (jusqu’à 25) + récence (jusqu’à 15) ± indicateurs (logiciel espion, fuite sensible, non vérifiée, fabriquée). <b>Critique</b> ≥ 75 · <b>Élevé</b> ≥ 55 · <b>Modéré</b> ≥ 35 · <b>Faible</b> &lt; 35.</p>
+      <p>Localisation : estimée à partir du domaine et de la description ; certaines fuites ne sont pas localisables.</p>
+    </div>
+    <div>
+      <h4>Sources</h4>
+      <p>Fuites : <a href="https://haveibeenpwned.com/" target="_blank" rel="noopener">Have I Been Pwned</a> (licence CC BY 4.0). Actualités : DataBreaches.net, ZATAZ, BleepingComputer, The Hacker News, The Register, CERT-FR. Fenêtre glissante des 6 derniers mois (date de publication de la fuite), mise à jour automatiquement toutes les 3 heures.</p>
+      <p>Ce site n’héberge aucune donnée personnelle issue des fuites.</p>
+    </div>
+  </footer>
+
+  <dialog id="modal" aria-labelledby="m-title">
+    <div class="modal-body" id="modal-body"></div>
+  </dialog>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+  <script type="module" src="assets/app.js"></script>
+</body>
+</html>
