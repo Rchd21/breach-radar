@@ -5,12 +5,35 @@ const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const nf = new Intl.NumberFormat(locale);
 const compact = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 });
-const fmtDate = (d) => new Date(d).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtDate = (d) => new Date(d).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
 const DAY = 86400000;
-const PAGE = 24;
+const PAGE = 25;
+
+// Icônes au trait (24×24), à la place des emojis.
+const PATHS = {
+  carte: '<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M6 15h4"/>',
+  iban: '<path d="M3 9l9-5 9 5M5 9v9M9.5 9v9M14.5 9v9M19 9v9M3 20h18"/>',
+  identite: '<rect x="2.5" y="5" width="19" height="14" rx="2"/><circle cx="8.5" cy="11" r="2"/><path d="M5.5 16c.6-1.4 1.7-2 3-2s2.4.6 3 2M14 10h4M14 14h3"/>',
+  mdp: '<circle cx="7.5" cy="14.5" r="3.5"/><path d="M10 12l9-9M15 7l2.5 2.5M17.5 4.5L20 7"/>',
+  crypto: '<circle cx="12" cy="12" r="9"/><path d="M9.5 8h4a2 2 0 010 4h-4h4.5a2 2 0 010 4h-4.5zM11 6.5v1.5M11 16v1.5"/>',
+  sante: '<path d="M20.5 8.5c0 5.5-8.5 11-8.5 11s-8.5-5.5-8.5-11A4.5 4.5 0 0112 6a4.5 4.5 0 018.5 2.5z"/><path d="M7 12h2.5l1.5-2.5 2 5 1.5-2.5H17"/>',
+  intime: '<path d="M20 15a2 2 0 01-2 2H8l-4 4V5a2 2 0 012-2h12a2 2 0 012 2z"/>',
+  rancon: '<rect x="4" y="10.5" width="16" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 018 0v3.5M12 14.5v2.5"/>',
+  officiel: '<path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
+  contact: '<path d="M21 16.5v3a2 2 0 01-2.2 2A19.8 19.8 0 012.5 5.2 2 2 0 014.5 3h3a2 2 0 012 1.7c.1 1 .4 1.9.7 2.8a2 2 0 01-.5 2.1L8.5 10.8a16 16 0 006.7 6.7l1.2-1.2a2 2 0 012.1-.5c.9.3 1.8.6 2.8.7a2 2 0 011.7 2z"/>',
+  email: '<rect x="2.5" y="4.5" width="19" height="15" rx="2"/><path d="M3 6l9 7 9-7"/>',
+  alert: '<path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  close: '<path d="M18 6L6 18M6 6l12 12"/>',
+  external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/>',
+};
+const icon = (name, cls = 'icon') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name] || ''}</svg>`;
+const extLink = (url, label) => `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}${icon('external')}</a>`;
 
 applyStatic();
-$('#lang-switch').addEventListener('click', () => setLang(lang === 'fr' ? 'en' : 'fr'));
+document.querySelectorAll('#lang-seg [data-lang]').forEach((b) => {
+  b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
+  b.addEventListener('click', () => { if (b.dataset.lang !== lang) setLang(b.dataset.lang); });
+});
 
 const store = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
@@ -32,7 +55,7 @@ state.news = news;
 countries.forEach((c) => { state.countries[c.code] = { ...c, name: countryName(c.code) }; });
 breaches.forEach((b) => state.byId.set(b.id, b));
 
-/* ---------- Filtres communs ---------- */
+/* ---------- Filtres et formats communs ---------- */
 function inPeriod(b) {
   return !state.period || Date.now() - Date.parse(b.addedDate) <= state.period * DAY;
 }
@@ -48,62 +71,59 @@ const typeLabel = (k) => T.types[k][0];
 const typeShort = (k) => T.types[k][1];
 const countryOf = (b) => (b.country && state.countries[b.country] ? state.countries[b.country].name : T.notLocated);
 const descriptionOf = (b) => (b.type === 'officiel' ? T.offDesc(stateNames(b.authorities), b.attackType) : b.description);
+const sev = (b, label = false) => `<span class="sev lvl-${b.level}"><b>${b.score}</b>${label ? T.levels[b.level] : ''}</span>`;
+const typeTag = (k) => `<span class="type t-${k}">${typeShort(k)}</span>`;
+const HOT = new Set(['Passwords', 'Credit cards', 'Credit card CVV', 'Bank account numbers', 'Government issued IDs', 'Social security numbers', 'Passport numbers', 'Personal health data', 'Mnemonic phrases', 'Auth tokens', 'Private messages']);
+const tags = (classes, max = Infinity) => {
+  const sorted = [...classes].sort((x, y) => HOT.has(y) - HOT.has(x));
+  return sorted.slice(0, max).map((c) => `<span class="tag${HOT.has(c) ? ' hot' : ''}">${esc(cls(c))}</span>`).join('')
+    + (sorted.length > max ? `<span class="tag">+${sorted.length - max}</span>` : '');
+};
 
 function isWatched(b) {
   const hay = `${b.domain || ''} ${b.title}`.toLowerCase();
   return state.watch.some((w) => hay.includes(w));
 }
 
-/* ---------- En-tête et statistiques ---------- */
+/* ---------- En-tête et indicateurs ---------- */
 function renderHeader() {
   const mins = Math.round((Date.now() - Date.parse(meta.generatedAt)) / 60000);
   const ago = mins < 60 ? `${mins} ${T.ago.min}` : mins < 1440 ? `${Math.round(mins / 60)} ${T.ago.h}` : `${Math.round(mins / 1440)} ${T.ago.d}`;
   $('#updated').textContent = T.updated(ago);
-  const crit = breaches.filter((b) => b.level === 'critique').length;
   const t = meta.byType;
   $('#stats').innerHTML = [
-    [nf.format(meta.breaches), T.statWindow(meta.windowMonths)],
-    [nf.format(crit), T.statCrit, 'crit'],
-    [nf.format(t.hibp), T.statConfirmed(compact.format(sumCount(breaches.filter((b) => b.type === 'hibp'))))],
-    [nf.format(t.ransomware), T.statRansom],
-    [nf.format(t.officiel), T.statOfficial],
-  ].map(([v, l, c = '']) => `<div class="stat ${c}"><b>${v}</b><span>${esc(l)}</span></div>`).join('');
+    [T.statWindow(meta.windowMonths), nf.format(meta.breaches)],
+    [T.statCrit, nf.format(breaches.filter((b) => b.level === 'critique').length), '', 'crit'],
+    [T.statConfirmed, nf.format(t.hibp), T.statConfirmedSub(compact.format(sumCount(breaches.filter((b) => b.type === 'hibp'))))],
+    [T.statRansom, nf.format(t.ransomware)],
+    [T.statOfficial, nf.format(t.officiel)],
+  ].map(([l, v, sub = '', c = '']) => `<div class="kpi ${c}"><span>${esc(l)}</span><b>${v}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</div>`).join('');
 }
 
-/* ---------- Chips de niveau et de type ---------- */
-function renderLevelChips() {
-  $('#level-chips').innerHTML = Object.entries(LEVELS).map(([k, v]) =>
-    `<button class="chip" data-level="${k}" aria-pressed="${state.levels.has(k)}"><i style="background:${v.color}"></i>${T.levels[k]}</button>`).join('');
-}
-$('#level-chips').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-level]');
-  if (!btn) return;
-  const k = btn.dataset.level;
-  if (state.levels.has(k) && state.levels.size > 1) state.levels.delete(k); else state.levels.add(k);
-  refresh();
-});
-function renderTypeChips() {
+/* ---------- Filtres de sévérité et de source ---------- */
+function renderToggles() {
+  $('#level-chips').innerHTML = Object.keys(LEVELS).map((k) =>
+    `<button class="toggle lvl-${k}" data-level="${k}" aria-pressed="${state.levels.has(k)}"><i></i>${T.levels[k]}</button>`).join('');
   $('#type-chips').innerHTML = Object.keys(TYPES).map((k) =>
-    `<button class="chip" data-type="${k}" aria-pressed="${state.types.has(k)}"><i class="t-${k}"></i>${typeLabel(k)}</button>`).join('');
+    `<button class="toggle t-${k}" data-type="${k}" aria-pressed="${state.types.has(k)}"><i></i>${typeLabel(k)}</button>`).join('');
 }
-$('#type-chips').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-type]');
-  if (!btn) return;
-  const k = btn.dataset.type;
-  if (state.types.has(k) && state.types.size > 1) state.types.delete(k); else state.types.add(k);
+function toggleIn(set, k) {
+  if (set.has(k) && set.size > 1) set.delete(k); else set.add(k);
   refresh();
-});
+}
+$('#level-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-level]'); if (b) toggleIn(state.levels, b.dataset.level); });
+$('#type-chips').addEventListener('click', (e) => { const b = e.target.closest('[data-type]'); if (b) toggleIn(state.types, b.dataset.type); });
 $('#period').addEventListener('change', (e) => { state.period = Number(e.target.value); refresh(); });
 
 /* ---------- Carte ---------- */
 // Fond de carte vectoriel (Natural Earth via world-atlas) : aucune clé d'API requise.
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const map = L.map('map', { minZoom: 1.5, maxZoom: 7, zoomSnap: 0.5, maxBounds: [[-75, -200], [88, 200]] }).setView([28, 10], 2);
-map.attributionControl.addAttribution('Natural Earth');
+map.attributionControl.setPrefix(false).addAttribution('Natural Earth · Leaflet');
 fetch('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json').then((r) => r.json()).then((topo) => {
   L.geoJSON(topojson.feature(topo, topo.objects.countries), {
     interactive: false,
-    style: { color: cssVar('--line'), weight: 0.8, fillColor: cssVar('--card-2'), fillOpacity: 1 },
+    style: { color: cssVar('--border-strong'), weight: 0.6, fillColor: cssVar('--surface'), fillOpacity: 1 },
   }).addTo(map).bringToBack();
 });
 const layer = L.layerGroup().addTo(map);
@@ -116,26 +136,24 @@ function renderMap(list) {
   for (const [code, items] of Object.entries(groups)) {
     const c = state.countries[code];
     items.sort((a, b) => b.score - a.score);
-    const worst = items[0].level;
+    const color = LEVEL_COLORS[items[0].level];
     const marker = L.circleMarker([c.lat, c.lng], {
-      radius: Math.min(40, 5 + Math.sqrt(items.length) * 2.2), color: LEVEL_COLORS[worst], weight: 2,
-      fillColor: LEVEL_COLORS[worst], fillOpacity: 0.35,
+      radius: Math.min(36, 4 + Math.sqrt(items.length) * 2), color, weight: 1.5, fillColor: color, fillOpacity: 0.22,
     }).addTo(layer);
-    marker.bindTooltip(`${esc(c.name)} — ${items.length}`);
+    marker.bindTooltip(`${esc(c.name)} · ${items.length}`);
     marker.bindPopup(() => {
       const el = document.createElement('div');
       el.innerHTML = `<h4>${esc(c.name)}</h4>
-        <p class="note" style="margin:0 0 8px">${Object.keys(TYPES).map((k) => [items.filter((b) => b.type === k).length, typeLabel(k).toLowerCase()])
+        <p class="pop-meta">${Object.keys(TYPES).map((k) => [items.filter((b) => b.type === k).length, typeLabel(k).toLowerCase()])
           .filter(([n]) => n).map(([n, l]) => `${n} ${l}`).join(' · ')}</p>
-        <ul class="pop-list">${items.slice(0, 6).map((b) =>
-          `<li><span class="score lvl-${b.level}">${b.score}</span><button data-open="${esc(b.id)}">${esc(b.title)}</button></li>`).join('')}</ul>
-        <button class="ghost" data-country="${code}">${T.seeAll(items.length)}</button>`;
+        <ul class="pop-list">${items.slice(0, 6).map((b) => `<li>${sev(b)}<button data-open="${esc(b.id)}">${esc(b.title)}</button></li>`).join('')}</ul>
+        <button class="btn secondary" data-country="${code}">${T.seeAll(items.length)}</button>`;
       el.addEventListener('click', (e) => {
         const open = e.target.closest('[data-open]');
         if (open) openBreach(open.dataset.open);
         if (e.target.closest('[data-country]')) {
           state.country = code; $('#country').value = code; state.shown = PAGE; renderList();
-          location.hash = 'fuites';
+          location.hash = 'registre';
         }
       });
       return el;
@@ -145,14 +163,13 @@ function renderMap(list) {
 }
 
 function renderLatest(list) {
-  const top = list.filter((b) => b.level === 'critique' || b.level === 'eleve').slice(0, 15);
-  $('#latest').innerHTML = top.map((b) => `<li><button data-open="${esc(b.id)}">
-      <span class="score lvl-${b.level}">${b.score}</span><span class="t">${esc(b.title)}</span>
-      <span class="s">${typeShort(b.type)} · ${fmtDate(b.addedDate)} · ${volume(b)}</span></button></li>`).join('')
-    || `<li class="note">${T.noneForFilters}</li>`;
+  const top = list.filter((b) => b.level === 'critique' || b.level === 'eleve').slice(0, 20);
+  $('#latest').innerHTML = top.map((b) => `<li><button data-open="${esc(b.id)}">${sev(b)}
+      <span class="t">${esc(b.title)}</span><span class="s">${typeShort(b.type)} · ${fmtDate(b.addedDate)}</span></button></li>`).join('')
+    || `<li class="empty">${T.noneForFilters}</li>`;
 }
 
-/* ---------- Liste ---------- */
+/* ---------- Registre ---------- */
 function logo(b) {
   return b.logo
     ? `<img class="logo" src="${esc(b.logo)}" alt="" loading="lazy" data-initial="${esc(b.title[0])}">`
@@ -164,26 +181,23 @@ document.addEventListener('error', (e) => {
   if (img.tagName !== 'IMG' || !img.classList.contains('logo')) return;
   img.replaceWith(Object.assign(document.createElement('span'), { className: 'logo ph', textContent: img.dataset.initial }));
 }, true);
-const HOT = new Set(['Passwords', 'Credit cards', 'Credit card CVV', 'Bank account numbers', 'Government issued IDs', 'Social security numbers', 'Passport numbers', 'Personal health data', 'Mnemonic phrases', 'Auth tokens', 'Private messages']);
 
 function subtitle(b) {
   if (b.domain) return b.domain;
   if (b.group) return T.group(b.group);
   if (b.authorities) return T.notifiedTo(b.authorities.join(', '));
-  return '—';
+  return '';
 }
 
-function card(b) {
-  const classes = [...b.classes].sort((x, y) => HOT.has(y) - HOT.has(x));
-  return `<button class="card lvl-${b.level}${isWatched(b) ? ' watched' : ''}" data-open="${esc(b.id)}">
-    <div class="card-top">${logo(b)}<div><h3>${esc(b.title)}</h3><div class="dom">${esc(subtitle(b))}</div></div>
-      <span class="score lvl-${b.level}">${b.score}</span></div>
-    <div class="meta"><span class="badge lvl-${b.level}">${T.levels[b.level]}</span><span class="src-tag t-${b.type}">${typeShort(b.type)}</span>
-      <span>${volume(b)}</span><span>${fmtDate(b.addedDate)}</span><span>${esc(countryOf(b))}</span></div>
-    <div class="pills">${classes.slice(0, 5).map((c) => `<span class="pill${HOT.has(c) ? ' hot' : ''}">${esc(cls(c))}</span>`).join('')}
-      ${classes.length > 5 ? `<span class="pill">+${classes.length - 5}</span>` : ''}</div>
-  </button>`;
-}
+const row = (b) => `<tr data-open="${esc(b.id)}" tabindex="0"${isWatched(b) ? ' class="watched"' : ''}>
+    <td>${sev(b, true)}</td>
+    <td><div class="org">${logo(b)}<div><b>${esc(b.title)}</b><small>${esc(subtitle(b))}</small></div></div></td>
+    <td class="col-type">${typeTag(b.type)}</td>
+    <td class="col-data">${tags(b.classes, 3)}</td>
+    <td class="col-volume r num">${volume(b)}</td>
+    <td class="col-country">${esc(countryOf(b))}</td>
+    <td class="col-date num">${fmtDate(b.addedDate)}</td>
+  </tr>`;
 
 function filteredList() {
   const q = state.q.trim().toLowerCase();
@@ -202,8 +216,10 @@ function filteredList() {
 
 function renderList() {
   const list = filteredList();
+  const shown = Math.min(state.shown, list.length);
   $('#result-count').textContent = T.resultCount(nf.format(list.length), compact.format(sumCount(list)));
-  $('#list').innerHTML = list.slice(0, state.shown).map(card).join('') || `<p class="note">${T.noResults}</p>`;
+  $('#list').innerHTML = list.slice(0, shown).map(row).join('') || `<tr><td colspan="7" class="empty">${T.noResults}</td></tr>`;
+  $('#shown-count').textContent = list.length ? T.shownCount(nf.format(shown), nf.format(list.length)) : '';
   $('#more').hidden = list.length <= state.shown;
 }
 
@@ -227,13 +243,17 @@ for (const id of ['country', 'dataclass', 'sort']) {
   $(`#${id}`).addEventListener('change', (e) => { state[id] = e.target.value; state.shown = PAGE; renderList(); });
 }
 $('#more').addEventListener('click', () => { state.shown += PAGE; renderList(); });
+$('#list').addEventListener('keydown', (e) => {
+  const tr = e.target.closest('tr[data-open]');
+  if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openBreach(tr.dataset.open); }
+});
 
-/* ---------- Modale de détail ---------- */
+/* ---------- Panneau de détail ---------- */
 function adviceBlock(a, tag = 'h4') {
-  return `<div class="advice"><${tag}>${a.icon} ${esc(a.title)}</${tag}>
-    <span class="urgency${a.urgent ? ' now' : ''}">${esc(a.urgency)}</span>
+  return `<div class="advice"><div class="advice-head"><span class="advice-ico">${icon(a.id)}</span><div>
+      <${tag}>${esc(a.title)}</${tag}><span class="urgency${a.urgent ? ' now' : a.watch ? ' watch' : ''}">${esc(a.urgency)}</span></div></div>
     <ol>${a.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
-    <div class="links">${a.links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)} ↗</a>`).join('')}</div></div>`;
+    <div class="links">${a.links.map((l) => extLink(l.url, l.label)).join('')}</div></div>`;
 }
 
 function openBreach(id) {
@@ -243,31 +263,38 @@ function openBreach(id) {
   const advice = adviceFor(b.classes).map(localAdvice);
   const description = descriptionOf(b);
   const disclosure = T.disclosure[b.type];
+  const facts = [
+    [T.fType, typeTag(b.type)],
+    [T.fVolume, esc(volume(b, true))],
+    [b.type === 'ransomware' ? T.claimedOn : T.breachOn, fmtDate(b.breachDate)],
+    ...(b.type === 'ransomware' ? [] : [[T.publishedOn, fmtDate(b.addedDate)]]),
+    [T.fCountry, esc(country)],
+    ...(b.sector ? [[T.sector, esc(T.sectors[b.sector] || b.sector)]] : []),
+    [T.fStatus, b.verified ? T.verified : T.unverified],
+  ];
   $('#modal-body').innerHTML = `
-    <div class="m-head">${logo(b)}<div><h2 id="m-title">${esc(b.title)}</h2><div class="note">${esc(b.domain || '')}</div></div>
-      <button class="close" data-close aria-label="${T.close}">✕</button></div>
-    <div class="gauge lvl-${b.level}">
-      <div class="ring" style="--v:${b.score}"><div><span><b>${b.score}</b><br>/100</span></div></div>
-      <div><div class="badge lvl-${b.level}" style="font-size:14px;margin-bottom:6px">${T.criticality(T.levels[b.level])}</div>
-        <ul class="factors">${b.factors.map((f) => `<li><span>${esc(factorLabel(f))}</span><span>${f.points > 0 ? '+' : ''}${f.points}</span></li>`).join('')}</ul></div>
-    </div>
-    ${b.type === 'ransomware' ? `<p class="warn">${T.warnRansom(esc(b.group))}</p>` : ''}
-    <div class="meta"><span class="src-tag t-${b.type}">${typeShort(b.type)}</span><span><b>${volume(b, true)}</b></span>
-      <span>${b.type === 'ransomware' ? T.claimedOn : T.breachOn}${fmtDate(b.breachDate)}</span>
-      ${b.type === 'ransomware' ? '' : `<span>${T.publishedOn}${fmtDate(b.addedDate)}</span>`}<span>${esc(country)}</span>
-      ${b.sector ? `<span>${T.sector}${esc(T.sectors[b.sector] || b.sector)}</span>` : ''}
-      <span>${b.verified ? T.verified : T.unverified}</span></div>
-    <div class="m-section"><h3>${b.type === 'hibp' ? T.exposedData : T.natureOfBreach}</h3>
-      <div class="pills">${b.classes.map((c) => `<span class="pill${HOT.has(c) ? ' hot' : ''}">${esc(cls(c))}</span>`).join('')}</div></div>
-    <div class="m-section"><h3>${T.whatToDo}</h3>
-      <div class="m-actions">${advice.map((a) => adviceBlock(a)).join('') || `<p class="note">${T.beVigilant}</p>`}</div></div>
-    <div class="m-section"><h3>${esc(T.descTitle(T.typeSources[b.type], b.type !== 'officiel'))}</h3>
-      <p class="m-desc">${esc(description || T.noDesc)}</p>
-      <div class="links">
-        ${b.type === 'hibp' ? `<a href="https://haveibeenpwned.com/Breach/${encodeURIComponent(b.id)}" target="_blank" rel="noopener">${T.hibpPage} ↗</a>` : ''}
-        ${b.disclosureUrl ? `<a href="${esc(b.disclosureUrl)}" target="_blank" rel="noopener">${esc(typeof disclosure === 'function' ? disclosure(b.group) : disclosure)} ↗</a>` : ''}
-        <a href="https://haveibeenpwned.com/" target="_blank" rel="noopener">${T.checkEmail} ↗</a>
-      </div></div>`;
+    <div class="d-head">${logo(b)}<div><h2 id="m-title">${esc(b.title)}</h2><small>${esc(subtitle(b))}</small></div>
+      <button class="close" data-close aria-label="${T.close}">${icon('close')}</button></div>
+    <div class="d-body">
+      <div class="score-box lvl-${b.level}">
+        <div><div class="score-lvl">${T.criticality(T.levels[b.level])}</div><div class="score-num">${b.score}<small> / 100</small></div></div>
+        <div><div class="score-bar"><i style="width:${b.score}%"></i></div><div class="score-scale">${[0, 35, 55, 75, 100].map((v) => `<span style="left:${v}%">${v}</span>`).join('')}</div></div>
+      </div>
+      ${b.type === 'ransomware' ? `<div class="notice">${T.warnRansom(esc(b.group))}</div>` : ''}
+      <div class="d-section"><h3>${T.factsTitle}</h3><dl class="facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl></div>
+      <div class="d-section"><h3>${b.type === 'hibp' ? T.exposedData : T.natureOfBreach}</h3><div>${tags(b.classes)}</div></div>
+      <div class="d-section"><h3>${T.scoreTitle}</h3>
+        <table class="factors">${b.factors.map((f) => `<tr><td>${esc(factorLabel(f))}</td><td>${f.points > 0 ? '+' : ''}${f.points}</td></tr>`).join('')}</table></div>
+      <div class="d-section"><h3>${T.whatToDo}</h3>
+        <div class="d-actions">${advice.map((a) => adviceBlock(a)).join('') || `<p class="d-desc">${T.beVigilant}</p>`}</div></div>
+      <div class="d-section"><h3>${esc(T.descTitle(T.typeSources[b.type], b.type !== 'officiel'))}</h3>
+        <p class="d-desc">${esc(description || T.noDesc)}</p>
+        <div class="links">
+          ${b.type === 'hibp' ? extLink(`https://haveibeenpwned.com/Breach/${encodeURIComponent(b.id)}`, T.hibpPage) : ''}
+          ${b.disclosureUrl ? extLink(b.disclosureUrl, typeof disclosure === 'function' ? disclosure(b.group) : disclosure) : ''}
+          ${extLink('https://haveibeenpwned.com/', T.checkEmail)}
+        </div></div>
+    </div>`;
   const dlg = $('#modal');
   if (!dlg.open) dlg.showModal();
   dlg.scrollTop = 0;
@@ -288,19 +315,18 @@ window.addEventListener('hashchange', openFromHash);
 /* ---------- Surveillance de services ---------- */
 function renderWatch() {
   $('#watch-tags').innerHTML = state.watch.map((w) =>
-    `<span class="tag">${esc(w)}<button data-unwatch="${esc(w)}" aria-label="${esc(T.remove(w))}">✕</button></span>`).join('');
+    `<span class="watch-tag">${esc(w)}<button data-unwatch="${esc(w)}" aria-label="${esc(T.remove(w))}">×</button></span>`).join('');
   const hits = state.breaches.filter(isWatched).sort((a, b) => b.addedDate.localeCompare(a.addedDate));
   $('#watch-results').innerHTML = state.watch.length
-    ? hits.map((b) => `<li><span class="score lvl-${b.level}">${b.score}</span><button data-open="${esc(b.id)}">${esc(b.title)}</button>
-        <span class="note" style="margin-left:auto">${fmtDate(b.breachDate)}</span></li>`).join('') || `<li class="note">${T.noneKnown}</li>`
+    ? hits.slice(0, 20).map((b) => `<li>${sev(b)}<button data-open="${esc(b.id)}">${esc(b.title)}</button>
+        <span class="note">${fmtDate(b.addedDate)}</span></li>`).join('') || `<li class="note">${T.noneKnown}</li>`
     : '';
   const recent = hits.filter((b) => Date.now() - Date.parse(b.addedDate) <= 90 * DAY);
   const alert = $('#watch-alert');
   alert.hidden = !recent.length;
   if (recent.length) {
-    alert.innerHTML = `<span style="font-size:22px">🚨</span><div><b>${T.watchAlert(recent.length)}</b><br>
-      <span class="note">${recent.slice(0, 3).map((b) => esc(b.title)).join(', ')}</span></div>
-      <button data-open="${esc(recent[0].id)}">${T.whatToDoBtn}</button>`;
+    alert.innerHTML = `${icon('alert')}<div><b>${T.watchAlert(recent.length)}</b><div class="note">${recent.slice(0, 3).map((b) => esc(b.title)).join(', ')}</div></div>
+      <button class="btn secondary" data-open="${esc(recent[0].id)}">${T.whatToDoBtn}</button>`;
   }
 }
 $('#watch-form').addEventListener('submit', (e) => {
@@ -340,19 +366,19 @@ $('#pwd-form').addEventListener('submit', async (e) => {
   $('#pwd').value = '';
 });
 
-/* ---------- Guides et actualités ---------- */
+/* ---------- Guide de réponse et veille ---------- */
 $('#advice').innerHTML = allAdvice().map((a) => adviceBlock(a, 'h3')).join('');
 
 const NEWS_FILTERS = { all: T.newsAll, alert: T.newsAlert, fr: T.newsFr, en: T.newsEn };
 function renderNews() {
   $('#news-chips').innerHTML = Object.entries(NEWS_FILTERS).map(([k, v]) =>
-    `<button class="chip" data-news="${k}" aria-pressed="${state.newsFilter === k}">${v}</button>`).join('');
+    `<button data-news="${k}" aria-pressed="${state.newsFilter === k}">${v}</button>`).join('');
   const f = state.newsFilter;
-  const items = state.news.filter((n) => f === 'all' || (f === 'alert' ? n.alert : n.lang === f && !n.alert)).slice(0, 30);
-  $('#news').innerHTML = items.map((n) => `<li class="${n.alert ? 'alert' : ''}">
-      <div class="src"><b>${esc(n.source)}</b><span>${new Date(n.date).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })}</span></div>
-      <a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.title)}</a>
-      ${n.summary ? `<p>${esc(n.summary)}</p>` : ''}</li>`).join('') || `<li class="note">${T.noNews}</li>`;
+  const items = state.news.filter((n) => f === 'all' || (f === 'alert' ? n.alert : n.lang === f && !n.alert)).slice(0, 25);
+  $('#news').innerHTML = items.map((n) => `<li>
+      <div class="src"><b>${esc(n.source)}</b>${new Date(n.date).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })}${n.alert ? ` · <em>CERT-FR</em>` : ''}</div>
+      <div><a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.title)}</a>${n.summary ? `<p>${esc(n.summary)}</p>` : ''}</div></li>`).join('')
+    || `<li class="empty">${T.noNews}</li>`;
 }
 $('#news-chips').addEventListener('click', (e) => {
   const b = e.target.closest('[data-news]');
@@ -362,8 +388,7 @@ $('#news-chips').addEventListener('click', (e) => {
 /* ---------- Démarrage ---------- */
 function refresh() {
   const list = visible();
-  renderLevelChips();
-  renderTypeChips();
+  renderToggles();
   renderMap(list);
   renderLatest([...list].sort((a, b) => b.addedDate.localeCompare(a.addedDate)));
   state.shown = PAGE;
