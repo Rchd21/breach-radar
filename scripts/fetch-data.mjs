@@ -1,9 +1,10 @@
 // Collecte les données publiques et génère public/data/*.json + public/feed.xml.
 // Lancé à chaque déploiement (GitHub Actions, toutes les 3 h) ou via `npm run fetch`.
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { COUNTRIES, locate } from './lib/countries.mjs';
+import { COUNTRIES, locate, locateRansom } from './lib/countries.mjs';
+import { SHARDS, shardOf, writePages } from './lib/pages.mjs';
 import { ransomwareSector, scoreBreach, scoreOfficial, scoreRansomware } from './lib/score.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -104,7 +105,7 @@ async function buildRansomware() {
       .replace(/\S+@\S+/g, '[e-mail]').replace(/\b(?:https?:\/\/|www\.)\S+|\S+\.onion\S*/gi, '[lien retiré]')
       .slice(0, 300);
     const domain = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(title) ? title.toLowerCase() : null;
-    const { code, source } = locate(domain, description);
+    const { code, source } = locateRansom(domain, toText(p.description || ''));
     const { score, level, factors } = scoreRansomware({ date: date.toISOString(), description }, now);
     const sector = ransomwareSector(description);
     out.push({
@@ -284,6 +285,25 @@ const breaches = [...hibp, ...ransomware, ...official].sort((a, b) => b.addedDat
 // Ne jamais publier un site vide si toutes les sources sont tombées.
 if (!breaches.length) throw new Error('Aucune donnée collectée, déploiement annulé.');
 
+// Une même organisation peut apparaître dans plusieurs sources : on garde une ligne
+// principale (fuite confirmée > notification officielle > rançongiciel, puis score)
+// et on rattache les autres signalements à celle-ci.
+const TYPE_RANK = { hibp: 0, officiel: 1, ransomware: 2 };
+const groups = new Map();
+for (const b of breaches) {
+  const key = orgKey(b.title.replace(/\(.*?\)/g, ''));
+  if (key.length < 3) continue;
+  (groups.get(key) || groups.set(key, []).get(key)).push(b);
+}
+let merged = 0;
+for (const items of groups.values()) {
+  if (items.length < 2) continue;
+  items.sort((a, b) => TYPE_RANK[a.type] - TYPE_RANK[b.type] || b.score - a.score);
+  const [main, ...others] = items;
+  main.rel = others.map((o) => o.id);
+  for (const o of others) { o.dup = main.id; merged++; }
+}
+
 const byCountry = {};
 for (const b of breaches) {
   if (!b.country) continue;
@@ -291,21 +311,45 @@ for (const b of breaches) {
   c.count = (c.count || 0) + 1;
 }
 
+// Tendance : incidents rendus publics par semaine (lundi) et par source.
+const monday = (d) => { const x = new Date(d); x.setUTCHours(0, 0, 0, 0); x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7)); return x.toISOString().slice(0, 10); };
+const weekly = {};
+for (let t = SINCE.getTime(); t <= Date.now(); t += 7 * 86400000) weekly[monday(t)] = { hibp: 0, ransomware: 0, officiel: 0 };
+for (const b of breaches) if (!b.dup && weekly[monday(b.addedDate)]) weekly[monday(b.addedDate)][b.type]++;
+
 const meta = {
   generatedAt: new Date().toISOString(),
   windowMonths: WINDOW_MONTHS,
   since: SINCE.toISOString(),
   breaches: breaches.length,
-  accounts: breaches.reduce((s, b) => s + (b.count || 0), 0),
+  merged,
+  critical: breaches.filter((b) => b.level === 'critique').length,
+  accountsHibp: hibp.reduce((s, b) => s + (b.count || 0), 0),
   byType: { hibp: hibp.length, ransomware: ransomware.length, officiel: official.length },
   located: breaches.filter((b) => b.country).length,
+  weekly: Object.entries(weekly).map(([week, v]) => ({ week, ...v })),
   sources: ['Have I Been Pwned (CC BY 4.0)', 'RansomLook (AGPL-3.0)', 'California OAG', 'Washington AGO (data.wa.gov)', ...FEEDS.map((f) => f.name)],
 };
 
-await mkdir(OUT, { recursive: true });
-await writeFile(join(OUT, 'breaches.json'), JSON.stringify(breaches));
+// Chargement rapide : un index léger par source, et le détail (description, calcul
+// du score) réparti en 64 fichiers chargés seulement à l'ouverture d'une fiche.
+const DETAIL_KEYS = ['description', 'factors', 'disclosureUrl', 'attackType'];
+const shards = Array.from({ length: SHARDS }, () => ({}));
+const index = { hibp: [], ransomware: [], officiel: [] };
+for (const b of breaches) {
+  const light = {};
+  for (const [k, v] of Object.entries(b)) if (!DETAIL_KEYS.includes(k) && v != null && v !== false) light[k] = v;
+  index[b.type].push(light);
+  shards[shardOf(b.id)][b.id] = Object.fromEntries(DETAIL_KEYS.filter((k) => b[k] != null).map((k) => [k, b[k]]));
+}
+
+await rm(OUT, { recursive: true, force: true });
+await mkdir(join(OUT, 'details'), { recursive: true });
+for (const [type, list] of Object.entries(index)) await writeFile(join(OUT, `index-${type}.json`), JSON.stringify(list));
+await Promise.all(shards.map((s, i) => writeFile(join(OUT, 'details', `${i}.json`), JSON.stringify(s))));
 await writeFile(join(OUT, 'countries.json'), JSON.stringify(Object.values(byCountry)));
 await writeFile(join(OUT, 'news.json'), JSON.stringify(news));
-await writeFile(join(OUT, 'meta.json'), JSON.stringify(meta, null, 2));
+await writeFile(join(OUT, 'meta.json'), JSON.stringify(meta));
 await writeFile(join(ROOT, 'public', 'feed.xml'), buildRss(breaches));
-console.log(`✔ ${breaches.length} fuites sur ${WINDOW_MONTHS} mois (${meta.located} localisées), ${news.length} actualités`);
+const pages = await writePages(breaches, { root: join(ROOT, 'public'), siteUrl: SITE_URL });
+console.log(`✔ ${breaches.length} fuites sur ${WINDOW_MONTHS} mois (${meta.located} localisées, ${merged} rattachées à une autre source), ${pages} pages incident, ${news.length} actualités`);

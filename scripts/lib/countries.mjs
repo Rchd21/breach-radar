@@ -73,7 +73,7 @@ export const DOMAIN_OVERRIDES = {
   'carhartt.com': 'US', 'ringcentral.com': 'US', 'alcon.com': 'CH', 'brinkshome.com': 'US', 'exactsciences.com': 'US',
   'icsecurity.com': 'US', 'suno.com': 'US', 'paidwork.com': 'PL', 'fluke.com': 'US', 'goosecreek.com': 'US',
   'sysco.com': 'US', 'msgsports.com': 'US', 'jcpenny.com': 'US', 'limeleads.com': 'US', 'magairports.com': 'GB',
-  'unico.com.br': 'BR', 'netshoes.com.br': 'BR', 'paypal.com': 'US', 'ubisoft.com': 'FR', 'cdprojekt.com': 'PL',
+  'sharecare.com': 'US', 'unico.com.br': 'BR', 'netshoes.com.br': 'BR', 'paypal.com': 'US', 'ubisoft.com': 'FR', 'cdprojekt.com': 'PL',
 };
 
 // Mentions de pays dans les descriptions HIBP ("the French website...", "in Brazil", ...).
@@ -109,12 +109,41 @@ export function locate(domain, description) {
   const fromTld = TLD_ALIASES[tld] || (tld && tld.length === 2 && !VANITY_TLDS.has(tld) ? tld.toUpperCase() : null);
   if (fromTld && COUNTRIES[fromTld]) return { code: fromTld, source: 'domaine' };
 
-  // La première mention dans le texte est en général le pays de l'organisation.
+  // Seule la première phrase décrit l'organisation ; la suite cite souvent d'autres pays.
+  const code = firstMention((description || '').split(/(?<=[a-z0-9)])\. /)[0]);
+  return code ? { code, source: 'description' } : { code: null, source: null };
+}
+
+function firstMention(text) {
   let best = null;
   for (const [code, re] of MENTIONS) {
-    const m = re.exec(description || '');
+    const m = re.exec(text || '');
     if (m && (!best || m.index < best.index)) best = { code, index: m.index };
   }
-  if (best) return { code: best.code, source: 'description' };
-  return { code: null, source: null };
+  return best?.code || null;
+}
+
+const US_STATES = /\b(Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming|[A-Z][a-z]+, (?:AL|AZ|CA|CO|CT|FL|GA|IL|IN|MA|MD|MI|MN|MO|NC|NJ|NY|OH|OR|PA|SC|TN|TX|VA|WA|WI)\b)/;
+
+// Victimes de rançongiciels : on exploite la description brute (champ « Country: », domaines cités).
+export function locateRansom(domain, rawDescription) {
+  if (domain) {
+    const r = locate(domain, '');
+    if (r.code) return r;
+  }
+  const raw = rawDescription || '';
+  const field = raw.match(/Country:\s*([^|\n]{2,60})/i);
+  if (field) {
+    const code = /\b(US|USA)\b/.test(field[1]) || US_STATES.test(field[1]) ? 'US' : firstMention(field[1]);
+    if (code) return { code, source: 'description' };
+  }
+  for (const m of raw.matchAll(/\b(?:[a-z0-9-]+\.)+([a-z]{2,6})\b/gi)) {
+    const tld = m[1].toLowerCase();
+    if (tld === 'onion') continue;
+    const code = TLD_ALIASES[tld] || (tld.length === 2 && !VANITY_TLDS.has(tld) ? tld.toUpperCase() : null);
+    if (code && COUNTRIES[code]) return { code, source: 'domaine' };
+  }
+  const r = locate(null, raw);
+  if (r.code) return r;
+  return US_STATES.test(raw.slice(0, 200)) ? { code: 'US', source: 'description' } : r;
 }

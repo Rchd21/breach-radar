@@ -42,24 +42,53 @@ const store = {
 
 const state = {
   breaches: [], countries: {}, news: [], byId: new Map(),
-  levels: new Set(Object.keys(LEVELS)), types: new Set(Object.keys(TYPES)), period: 0,
+  // Les revendications de rançongiciels (non confirmées) sont masquées par défaut.
+  levels: new Set(Object.keys(LEVELS)), types: new Set(['hibp', 'officiel']), period: 0,
   q: '', country: '', dataclass: '', sort: 'added', shown: PAGE,
   watch: store.get('br-watch', []), newsFilter: 'all',
 };
 
-const [breaches, countries, news, meta] = await Promise.all(
-  ['breaches', 'countries', 'news', 'meta'].map((f) => fetch(`data/${f}.json`).then((r) => r.json())),
-);
-state.breaches = breaches;
+const getJson = (f) => fetch(`data/${f}.json`).then((r) => r.json());
+// Chargement rapide : fuites confirmées et notifications d'abord, rançongiciels ensuite en arrière-plan.
+const [countries, news, meta, hibp, officiel] = await Promise.all(['countries', 'news', 'meta', 'index-hibp', 'index-officiel'].map(getJson));
 state.news = news;
 countries.forEach((c) => { state.countries[c.code] = { ...c, name: countryName(c.code) }; });
-breaches.forEach((b) => state.byId.set(b.id, b));
+function addBreaches(list) {
+  state.breaches.push(...list);
+  list.forEach((b) => state.byId.set(b.id, b));
+  state.breaches.sort((a, b) => b.addedDate.localeCompare(a.addedDate));
+}
+addBreaches([...hibp, ...officiel]);
+
+// Détail d'une fiche (description, calcul du score) : réparti en 64 fichiers, même hachage que scripts/lib/pages.mjs.
+const SHARDS = 64;
+function shardOf(id) {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  return (h >>> 0) % SHARDS;
+}
+const shardCache = new Map();
+async function detailsOf(id) {
+  const n = shardOf(id);
+  if (!shardCache.has(n)) shardCache.set(n, getJson(`details/${n}`).catch(() => ({})));
+  return (await shardCache.get(n))[id] || {};
+}
+const pageName = (id) => `${id.replace(/[^A-Za-z0-9-]/g, '-')}.html`;
 
 /* ---------- Filtres et formats communs ---------- */
 function inPeriod(b) {
   return !state.period || Date.now() - Date.parse(b.addedDate) <= state.period * DAY;
 }
-const visible = () => state.breaches.filter((b) => state.levels.has(b.level) && state.types.has(b.type) && inPeriod(b));
+// Un signalement rattaché à une autre source n'apparaît pas si la ligne principale est déjà affichée.
+function visible() {
+  const list = state.breaches.filter((b) => state.levels.has(b.level) && state.types.has(b.type) && inPeriod(b));
+  const ids = new Set(list.map((b) => b.id));
+  return list.filter((b) => !b.dup || !ids.has(b.dup));
+}
+const relatedOf = (b) => {
+  const main = b.dup ? state.byId.get(b.dup) : b;
+  return [main, ...(main?.rel || []).map((id) => state.byId.get(id))].filter((x) => x && x.id !== b.id);
+};
 // Volume affiché : les rançongiciels et certaines notifications n'en publient pas.
 const volume = (b, long = false) => {
   if (b.count == null) return b.size ? T.volClaimed(b.size) : T.volUnknown;
@@ -93,8 +122,8 @@ function renderHeader() {
   const t = meta.byType;
   $('#stats').innerHTML = [
     [T.statWindow(meta.windowMonths), nf.format(meta.breaches)],
-    [T.statCrit, nf.format(breaches.filter((b) => b.level === 'critique').length), '', 'crit'],
-    [T.statConfirmed, nf.format(t.hibp), T.statConfirmedSub(compact.format(sumCount(breaches.filter((b) => b.type === 'hibp'))))],
+    [T.statCrit, nf.format(meta.critical), '', 'crit'],
+    [T.statConfirmed, nf.format(t.hibp), T.statConfirmedSub(compact.format(meta.accountsHibp))],
     [T.statRansom, nf.format(t.ransomware)],
     [T.statOfficial, nf.format(t.officiel)],
   ].map(([l, v, sub = '', c = '']) => `<div class="kpi ${c}"><span>${esc(l)}</span><b>${v}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</div>`).join('');
@@ -159,7 +188,8 @@ function renderMap(list) {
       return el;
     });
   }
-  $('#map-note').textContent = T.mapNote(nf.format(list.filter((b) => b.country).length), nf.format(list.length));
+  $('#map-note').textContent = T.mapNote(nf.format(list.filter((b) => b.country).length), nf.format(list.length))
+    + (state.types.has('ransomware') ? '' : ` ${T.ransomHint}`);
 }
 
 function renderLatest(list) {
@@ -191,7 +221,7 @@ function subtitle(b) {
 
 const row = (b) => `<tr data-open="${esc(b.id)}" tabindex="0"${isWatched(b) ? ' class="watched"' : ''}>
     <td>${sev(b, true)}</td>
-    <td><div class="org">${logo(b)}<div><b>${esc(b.title)}</b><small>${esc(subtitle(b))}</small></div></div></td>
+    <td><div class="org">${logo(b)}<div><b>${esc(b.title)}</b><small>${esc(subtitle(b))}${b.rel ? ` · <span class="rel">${T.otherSources(b.rel.length)}</span>` : ''}</small></div></div></td>
     <td class="col-type">${typeTag(b.type)}</td>
     <td class="col-data">${tags(b.classes, 3)}</td>
     <td class="col-volume r num">${volume(b)}</td>
@@ -224,6 +254,8 @@ function renderList() {
 }
 
 function fillSelects() {
+  const breaches = state.breaches;
+  for (const id of ['country', 'dataclass']) { const sel = $(`#${id}`); sel.length = 1; sel.value = state[id]; }
   const counts = {};
   breaches.forEach((b) => { if (b.country) counts[b.country] = (counts[b.country] || 0) + 1; });
   $('#country').insertAdjacentHTML('beforeend', Object.entries(counts)
@@ -235,6 +267,8 @@ function fillSelects() {
   $('#dataclass').insertAdjacentHTML('beforeend', Object.entries(dc).filter(([, n]) => n >= 5)
     .sort((a, b) => cls(a[0]).localeCompare(cls(b[0]), locale))
     .map(([c, n]) => `<option value="${esc(c)}">${esc(cls(c))} (${n})</option>`).join(''));
+  $('#country').value = state.country;
+  $('#dataclass').value = state.dataclass;
 }
 
 let qTimer;
@@ -256,9 +290,12 @@ function adviceBlock(a, tag = 'h4') {
     <div class="links">${a.links.map((l) => extLink(l.url, l.label)).join('')}</div></div>`;
 }
 
-function openBreach(id) {
-  const b = state.byId.get(id);
-  if (!b) return;
+async function openBreach(id) {
+  const light = state.byId.get(id);
+  if (!light) return;
+  const b = { ...light, ...(await detailsOf(id)) };
+  const related = relatedOf(b);
+  const shareUrl = new URL(b.type !== 'ransomware' && !b.dup ? `i/${pageName(b.id)}` : `./#fuite=${encodeURIComponent(b.id)}`, location.href.split('#')[0].split('?')[0]).href;
   const country = b.country ? `${countryOf(b)} (${T.estimation(T.countrySources[b.countrySource] || b.countrySource)})` : T.notLocated;
   const advice = adviceFor(b.classes).map(localAdvice);
   const description = descriptionOf(b);
@@ -281,10 +318,12 @@ function openBreach(id) {
         <div><div class="score-bar"><i style="width:${b.score}%"></i></div><div class="score-scale">${[0, 35, 55, 75, 100].map((v) => `<span style="left:${v}%">${v}</span>`).join('')}</div></div>
       </div>
       ${b.type === 'ransomware' ? `<div class="notice">${T.warnRansom(esc(b.group))}</div>` : ''}
+      ${related.length ? `<div class="d-section"><h3>${T.relatedTitle}</h3><ul class="rel-list">${related.map((r) =>
+        `<li>${sev(r)}<button data-open="${esc(r.id)}">${esc(r.title)}</button>${typeTag(r.type)}<span class="hint">${fmtDate(r.addedDate)}</span></li>`).join('')}</ul></div>` : ''}
       <div class="d-section"><h3>${T.factsTitle}</h3><dl class="facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl></div>
       <div class="d-section"><h3>${b.type === 'hibp' ? T.exposedData : T.natureOfBreach}</h3><div>${tags(b.classes)}</div></div>
       <div class="d-section"><h3>${T.scoreTitle}</h3>
-        <table class="factors">${b.factors.map((f) => `<tr><td>${esc(factorLabel(f))}</td><td>${f.points > 0 ? '+' : ''}${f.points}</td></tr>`).join('')}</table></div>
+        <table class="factors">${(b.factors || []).map((f) => `<tr><td>${esc(factorLabel(f))}</td><td>${f.points > 0 ? '+' : ''}${f.points}</td></tr>`).join('')}</table></div>
       <div class="d-section"><h3>${T.whatToDo}</h3>
         <div class="d-actions">${advice.map((a) => adviceBlock(a)).join('') || `<p class="d-desc">${T.beVigilant}</p>`}</div></div>
       <div class="d-section"><h3>${esc(T.descTitle(T.typeSources[b.type], b.type !== 'officiel'))}</h3>
@@ -294,6 +333,8 @@ function openBreach(id) {
           ${b.disclosureUrl ? extLink(b.disclosureUrl, typeof disclosure === 'function' ? disclosure(b.group) : disclosure) : ''}
           ${extLink('https://haveibeenpwned.com/', T.checkEmail)}
         </div></div>
+      <div class="d-share"><button class="btn secondary" data-copy="${esc(shareUrl)}">${T.copyLink}</button>
+        <a class="btn secondary" href="https://github.com/Rchd21/breach-radar/issues/new?template=correction.md&title=${encodeURIComponent(`Correction : ${b.title}`)}" target="_blank" rel="noopener">${T.reportError}</a></div>
     </div>`;
   const dlg = $('#modal');
   if (!dlg.open) dlg.showModal();
@@ -302,7 +343,12 @@ function openBreach(id) {
 }
 $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal' || e.target.closest('[data-close]')) $('#modal').close(); });
 $('#modal').addEventListener('close', () => { if (location.hash.startsWith('#fuite=')) history.replaceState(null, '', location.pathname + location.search); });
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
+  const copy = e.target.closest('[data-copy]');
+  if (copy) {
+    try { await navigator.clipboard.writeText(copy.dataset.copy); copy.textContent = T.copied; } catch { prompt(T.copyLink, copy.dataset.copy); }
+    return;
+  }
   const el = e.target.closest('[data-open]');
   if (el && !el.closest('.leaflet-popup')) openBreach(el.dataset.open);
 });
@@ -394,9 +440,52 @@ function refresh() {
   state.shown = PAGE;
   renderList();
 }
+/* ---------- Tendance hebdomadaire (petits multiples, une échelle par source) ---------- */
+const tip = Object.assign(document.createElement('div'), { className: 'tip', hidden: true });
+document.body.append(tip);
+function renderTrend() {
+  const weeks = meta.weekly;
+  const W = 300, H = 110, gap = 2, bw = (W - gap * (weeks.length - 1)) / weeks.length;
+  $('#trend').innerHTML = ['hibp', 'officiel', 'ransomware'].map((k) => {
+    const vals = weeks.map((w) => w[k]);
+    const max = Math.max(1, ...vals);
+    const total = vals.reduce((s, v) => s + v, 0);
+    const bars = weeks.map((w, i) => {
+      const h = Math.max(w[k] ? 2 : 0, (w[k] / max) * (H - 14));
+      const x = i * (bw + gap);
+      return `<g data-tip="${esc(`${T.weekOf(fmtDate(w.week))} · ${typeLabel(k)}${lang === 'fr' ? ' :' : ':'} <b>${w[k]}</b>`)}">
+        <rect class="bar-hit" x="${x}" y="0" width="${bw + gap}" height="${H}"/>
+        <rect class="bar" x="${x}" y="${H - h}" width="${bw}" height="${h}" rx="${Math.min(2, bw / 2)}"/></g>`;
+    }).join('');
+    return `<div class="trend-col t-${k}"><h3>${typeLabel(k)}</h3><div class="total">${nf.format(total)} <small>${T.trendTotal}</small></div>
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(typeLabel(k))}">
+        <line class="grid" x1="0" x2="${W}" y1="14" y2="14"/><line class="grid" x1="0" x2="${W}" y1="${H}" y2="${H}"/>${bars}
+      </svg>
+      <div class="trend-axis"><span>${fmtDate(weeks[0].week)}</span><span>${T.trendMax(nf.format(max))}</span><span>${fmtDate(weeks.at(-1).week)}</span></div></div>`;
+  }).join('');
+}
+$('#trend').addEventListener('mousemove', (e) => {
+  const g = e.target.closest('[data-tip]');
+  tip.hidden = !g;
+  if (!g) return;
+  tip.innerHTML = g.dataset.tip;
+  tip.style.left = `${Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8)}px`;
+  tip.style.top = `${e.clientY - 36}px`;
+});
+$('#trend').addEventListener('mouseleave', () => { tip.hidden = true; });
+
 renderHeader();
+renderTrend();
 fillSelects();
 refresh();
 renderWatch();
 renderNews();
 openFromHash();
+
+getJson('index-ransomware').then((list) => {
+  addBreaches(list);
+  fillSelects();
+  refresh();
+  renderWatch();
+  openFromHash();
+}).catch(() => { /* source indisponible : le reste du site fonctionne */ });

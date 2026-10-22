@@ -33,6 +33,18 @@ jobs:
         with:
           path: public
 
+  # GitHub désactive les workflows planifiés d'un dépôt sans commit depuis 60 jours.
+  # Réactiver le workflow via l'API remet ce compteur à zéro, sans créer de commit.
+  keepalive:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - run: gh api --method PUT "repos/${{ github.repository }}/actions/workflows/deploy.yml/enable"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   deploy:
     needs: build
     runs-on: ubuntu-latest

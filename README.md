@@ -9,6 +9,10 @@ Site public de suivi des fuites de données mondiales rendues publiques sur les 
 - **Suis-je concerné ?** : surveillance de vos services (stockée dans le navigateur), test anonyme de mot de passe (k-anonymat), liens HIBP / Mozilla Monitor.
 - **Actualités en direct** : DataBreaches.net, ZATAZ, BleepingComputer, The Hacker News, The Register, alertes CERT-FR.
 - **Flux RSS** `feed.xml` des fuites critiques et élevées.
+- **Tendance hebdomadaire** par source, **pages par incident** (aperçu au partage, `sitemap.xml`), image d'aperçu `og.png`.
+- **Doublons rattachés** : une organisation présente dans plusieurs sources n'a qu'une ligne, avec ses autres signalements dans la fiche.
+- **Rançongiciels masqués par défaut** (revendications non confirmées), sans page indexable.
+- **Mentions légales** (`mentions-legales.html`) et formulaire de correction (`.github/ISSUE_TEMPLATE/correction.md`).
 
 Site **bilingue français / anglais** (bouton FR/EN, détection automatique de la langue du navigateur, lien direct `?lang=en`).
 
@@ -39,14 +43,15 @@ Puis ouvrir http://localhost:8080. `npm run fetch` régénère seulement les don
 
 Le site est servi à `https://<vous>.github.io/breach-radar/`.
 
-> GitHub suspend les workflows planifiés d’un dépôt sans activité depuis 60 jours : un clic sur *Enable workflow* dans l’onglet Actions les réactive.
+> GitHub suspend les workflows planifiés d’un dépôt sans commit depuis 60 jours : le job `keepalive` du workflow réactive automatiquement la planification à chaque exécution.
 
 Autres hébergeurs (Netlify, Cloudflare Pages, Vercel) : commande de build `node scripts/fetch-data.mjs`, dossier publié `public`, et un « deploy hook » appelé par un cron pour rafraîchir les données.
 
 ## Structure
 
 ```
-scripts/fetch-data.mjs     collecte HIBP, RansomLook, CA, WA + flux RSS → public/data/*.json, public/feed.xml
+scripts/fetch-data.mjs     collecte HIBP, RansomLook, CA, WA + flux RSS → public/data/ (index par source, détails en 64 fichiers), feed.xml
+scripts/lib/pages.mjs      pages /i/<incident>.html, sitemap.xml, robots.txt
 scripts/lib/score.mjs      calcul du score de criticité
 scripts/lib/countries.mjs  localisation (siège connu, domaine national, description)
 public/                    le site (index.html, assets/ ; traductions dans assets/i18n.js)

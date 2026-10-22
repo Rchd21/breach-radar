@@ -5,6 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Breach Radar — Observatoire des fuites de données</title>
   <meta name="description" content="Suivi consolidé des fuites de données dans le monde : score de sévérité, carte des organisations touchées et recommandations de réponse.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Breach Radar">
+  <meta property="og:title" content="Breach Radar — Observatoire des fuites de données">
+  <meta property="og:description" content="Fuites confirmées, revendications de rançongiciels et notifications officielles, avec score de sévérité et recommandations de réponse. Mis à jour toutes les 3 heures.">
+  <meta property="og:url" content="https://rchd21.github.io/breach-radar/">
+  <meta property="og:image" content="https://rchd21.github.io/breach-radar/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://rchd21.github.io/breach-radar/">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#151a21" media="(prefers-color-scheme: dark)">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23101828'/><path d='M16 7l8 3v6c0 5-3.4 8.4-8 9.5C11.4 24.4 8 21 8 16v-6z' fill='none' stroke='white' stroke-width='2.2' stroke-linejoin='round'/></svg>">
@@ -76,6 +86,13 @@
           </aside>
         </div>
         <p class="panel-foot" id="map-note"></p>
+      </div>
+    </section>
+
+    <section id="tendance" class="section">
+      <div class="panel">
+        <div class="panel-head"><div><h2 data-i18n="trendTitle"></h2><p data-i18n="trendSub"></p></div></div>
+        <div class="trend" id="trend"></div>
       </div>
     </section>
 
@@ -181,7 +198,7 @@
       <div class="footer-brand">
         <a class="brand" href="./"><span class="brand-mark"><svg viewBox="0 0 24 24"><path d="M12 3l7 2.6v5.2c0 4.4-3 7.4-7 8.6-4-1.2-7-4.2-7-8.6V5.6z" stroke-linejoin="round"/></svg></span>Breach Radar</a>
         <p data-i18n="footerAbout"></p>
-        <p><a href="feed.xml">RSS</a></p>
+        <p><a href="mentions-legales.html" class="legal-link" data-i18n="legal"></a> · <a href="https://github.com/Rchd21/breach-radar/issues/new?template=correction.md" class="legal-link" target="_blank" rel="noopener" data-i18n="contact"></a> · <a href="feed.xml" class="legal-link">RSS</a></p>
       </div>
       <div>
         <h4 data-i18n="methodTitle"></h4>
