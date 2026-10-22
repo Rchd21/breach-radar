@@ -76,7 +76,7 @@ function finish(total, factors) {
 
 // Revendication de rançongiciel : données internes volées et menacées de publication.
 // Le volume est estimé à partir de la taille annoncée (Go/To) quand elle est connue.
-export function scoreRansomware({ date, description = '' }, now = Date.now()) {
+export function scoreRansomware({ date, description = '', sector: knownSector }, now = Date.now()) {
   const factors = [{ k: 'rwClaim', points: 32 }];
   const m = description.match(/(\d+(?:[.,]\d+)?)\s*(TB|GB|To|Go)\b/i);
   let volume = 6;
@@ -88,7 +88,7 @@ export function scoreRansomware({ date, description = '' }, now = Date.now()) {
     factors.push({ k: 'rwSizeUnknown', points: volume });
   }
   const recency = recencyFactor(date, now, factors);
-  const sector = ransomwareSector(description);
+  const sector = knownSector || ransomwareSector(description);
   const bonus = sector === 'Health' ? 8 : sector === 'Financial' ? 5 : 0;
   if (bonus) factors.push({ k: 'rwSector', v: sector, points: bonus });
   factors.push({ k: 'rwUnconfirmed', points: -5 });
@@ -113,6 +113,16 @@ export function scoreOfficial({ date, count, sector, attackType }, now = Date.no
   const attack = /ransomware|malware/i.test(attackType || '') ? 5 : 0;
   if (attack) factors.push({ k: 'attack', v: attackType, points: attack });
   return finish(sens + volume + recency + attack, factors);
+}
+
+// Article de presse : fuite rapportée par un média spécialisé, sans détail structuré des données.
+export function scorePress({ date, text = '' }, now = Date.now()) {
+  const factors = [{ k: 'pressReport', points: 30 }];
+  const sensitive = /bank|banque|IBAN|card|carte bancaire|health|santé|hôpital|hospital|patient|passport|passeport|social security|sécurité sociale|password|mot de passe/i.test(text);
+  if (sensitive) factors.push({ k: 'pressSensitive', points: 10 });
+  factors.push({ k: 'volumeUnpublished', points: 8 });
+  const recency = recencyFactor(date, now, factors);
+  return finish(30 + (sensitive ? 10 : 0) + 8 + recency, factors);
 }
 
 export function levelOf(score) {

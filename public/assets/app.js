@@ -43,14 +43,14 @@ const store = {
 const state = {
   breaches: [], countries: {}, news: [], byId: new Map(),
   // Les revendications de rançongiciels (non confirmées) sont masquées par défaut.
-  levels: new Set(Object.keys(LEVELS)), types: new Set(['hibp', 'officiel']), period: 0,
+  levels: new Set(Object.keys(LEVELS)), types: new Set(['hibp', 'officiel', 'presse']), period: 0,
   q: '', country: '', dataclass: '', sort: 'added', shown: PAGE,
   watch: store.get('br-watch', []), newsFilter: 'all',
 };
 
 const getJson = (f) => fetch(`data/${f}.json`).then((r) => r.json());
 // Chargement rapide : fuites confirmées et notifications d'abord, rançongiciels ensuite en arrière-plan.
-const [countries, news, meta, hibp, officiel] = await Promise.all(['countries', 'news', 'meta', 'index-hibp', 'index-officiel'].map(getJson));
+const [countries, news, meta, hibp, officiel, presse] = await Promise.all(['countries', 'news', 'meta', 'index-hibp', 'index-officiel', 'index-presse'].map((f) => getJson(f).catch(() => [])));
 state.news = news;
 countries.forEach((c) => { state.countries[c.code] = { ...c, name: countryName(c.code) }; });
 function addBreaches(list) {
@@ -58,7 +58,7 @@ function addBreaches(list) {
   list.forEach((b) => state.byId.set(b.id, b));
   state.breaches.sort((a, b) => b.addedDate.localeCompare(a.addedDate));
 }
-addBreaches([...hibp, ...officiel]);
+addBreaches([...hibp, ...officiel, ...presse]);
 
 // Détail d'une fiche (description, calcul du score) : réparti en 64 fichiers, même hachage que scripts/lib/pages.mjs.
 const SHARDS = 64;
@@ -126,6 +126,7 @@ function renderHeader() {
     [T.statConfirmed, nf.format(t.hibp), T.statConfirmedSub(compact.format(meta.accountsHibp))],
     [T.statRansom, nf.format(t.ransomware)],
     [T.statOfficial, nf.format(t.officiel)],
+    [T.statPress, nf.format(t.presse || 0)],
   ].map(([l, v, sub = '', c = '']) => `<div class="kpi ${c}"><span>${esc(l)}</span><b>${v}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</div>`).join('');
 }
 
@@ -230,6 +231,7 @@ document.addEventListener('error', (e) => {
 function subtitle(b) {
   if (b.domain) return b.domain;
   if (b.group) return T.group(b.group);
+  if (b.outlet) return b.outlet;
   if (b.authorities) return T.notifiedTo(b.authorities.join(', '));
   return '';
 }
@@ -333,6 +335,7 @@ async function openBreach(id) {
         <div><div class="score-bar"><i style="width:${b.score}%"></i></div><div class="score-scale">${[0, 35, 55, 75, 100].map((v) => `<span style="left:${v}%">${v}</span>`).join('')}</div></div>
       </div>
       ${b.type === 'ransomware' ? `<div class="notice">${T.warnRansom(esc(b.group))}</div>` : ''}
+      ${b.type === 'presse' ? `<div class="notice">${T.warnPress(esc(b.outlet))}</div>` : ''}
       ${related.length ? `<div class="d-section"><h3>${T.relatedTitle}</h3><ul class="rel-list">${related.map((r) =>
         `<li>${sev(r)}<button data-open="${esc(r.id)}">${esc(r.title)}</button>${typeTag(r.type)}<span class="hint">${fmtDate(r.addedDate)}</span></li>`).join('')}</ul></div>` : ''}
       <div class="d-section"><h3>${T.factsTitle}</h3><dl class="facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl></div>
@@ -461,8 +464,8 @@ document.body.append(tip);
 function renderTrend() {
   const weeks = meta.weekly;
   const W = 300, H = 110, gap = 2, bw = (W - gap * (weeks.length - 1)) / weeks.length;
-  $('#trend').innerHTML = ['hibp', 'officiel', 'ransomware'].map((k) => {
-    const vals = weeks.map((w) => w[k]);
+  $('#trend').innerHTML = ['hibp', 'officiel', 'presse', 'ransomware'].map((k) => {
+    const vals = weeks.map((w) => w[k] || 0);
     const max = Math.max(1, ...vals);
     const total = vals.reduce((s, v) => s + v, 0);
     const bars = weeks.map((w, i) => {

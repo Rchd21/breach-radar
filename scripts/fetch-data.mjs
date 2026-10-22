@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { COUNTRIES, locate, locateRansom } from './lib/countries.mjs';
 import { SHARDS, shardOf, writePages } from './lib/pages.mjs';
-import { ransomwareSector, scoreBreach, scoreOfficial, scoreRansomware } from './lib/score.mjs';
+import { ransomwareSector, scoreBreach, scoreOfficial, scorePress, scoreRansomware } from './lib/score.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'public', 'data');
@@ -86,48 +86,80 @@ const slug = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').rep
 // Nom d'organisation normalisé pour rapprocher les notifications de plusieurs États.
 const orgKey = (s) => slug(s).replace(/-(inc|llc|ltd|corp|corporation|co|company|lp|llp|pc|pa|plc|group)\b/g, '').replace(/-+$/, '');
 
-// Victimes revendiquées sur les sites de fuite des groupes de rançongiciels (RansomLook, AGPL-3.0).
+// Victimes revendiquées sur les sites de fuite des groupes de rançongiciels.
+// Deux agrégateurs fusionnés : RansomLook (AGPL-3.0) et ransomware.live, qui fournit souvent le pays et le secteur.
+const cleanDomain = (w) => (w || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[/?#].*$/, '') || null;
+const SECTOR_OF_ACTIVITY = [[/health|hospital|medical|pharma|clinic|dental/i, 'Health'], [/financ|bank|insurance|credit/i, 'Financial'], [/government|public sector|municipal/i, 'Government'], [/education|school|universit/i, 'Education']];
+
 async function buildRansomware() {
   const days = Math.ceil((Date.now() - SINCE) / 86400000);
-  const raw = await get(`https://www.ransomlook.io/api/last/${days}`, 'json');
+  const [look, live] = await Promise.allSettled([
+    get(`https://www.ransomlook.io/api/last/${days}`, 'json'),
+    get('https://data.ransomware.live/victims.json', 'json'),
+  ]);
+  if (look.status === 'rejected' && live.status === 'rejected') throw look.reason;
+  if (look.status === 'rejected') console.warn(`⚠ RansomLook indisponible : ${look.reason.message}`);
+  if (live.status === 'rejected') console.warn(`⚠ ransomware.live indisponible : ${live.reason.message}`);
+
+  const victims = new Map();
+  const add = (title, group, date, extra) => {
+    title = toText(title).replace(/\s+/g, ' ').trim();
+    if (!title || !group || !(date >= SINCE)) return;
+    const key = `${group.toLowerCase()}|${title.toLowerCase()}`;
+    const v = victims.get(key) || { title, group, date, feeds: [] };
+    if (date < v.date) v.date = date;
+    for (const [k, val] of Object.entries(extra)) if (val && !v[k]) v[k] = val;
+    v.feeds.push(extra.feed);
+    victims.set(key, v);
+  };
+  for (const p of look.value || []) {
+    if (p.private) continue;
+    add(p.post_title, p.group_name, new Date(`${String(p.discovered).replace(' ', 'T').slice(0, 19)}Z`), { feed: 'RansomLook', rawDesc: p.description });
+  }
+  for (const v of live.value || []) {
+    add(v.post_title, v.group_name, new Date(v.discovered), {
+      feed: 'ransomware.live', rawDesc: v.description, website: cleanDomain(v.website),
+      country: /^[A-Z]{2}$/.test(v.country || '') ? v.country : null,
+      activity: v.activity && v.activity !== 'Not Found' ? v.activity : null,
+    });
+  }
+
   const now = Date.now();
-  const seen = new Set();
-  const out = [];
-  for (const p of raw) {
-    const title = toText(p.post_title).replace(/\s+/g, ' ').trim();
-    const date = new Date(`${p.discovered.replace(' ', 'T').slice(0, 19)}Z`);
-    if (!title || p.private || !(date >= SINCE)) continue;
-    const key = `${p.group_name}|${title.toLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+  return [...victims.values()].map((v) => {
     // On retire liens et adresses e-mail : aucun renvoi vers les sites des criminels.
-    const description = toText(p.description || '')
+    const description = toText(v.rawDesc || '')
       .replace(/\S+@\S+/g, '[e-mail]').replace(/\b(?:https?:\/\/|www\.)\S+|\S+\.onion\S*/gi, '[lien retiré]')
       .slice(0, 300);
-    const domain = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(title) ? title.toLowerCase() : null;
-    const { code, source } = locateRansom(domain, toText(p.description || ''));
-    const { score, level, factors } = scoreRansomware({ date: date.toISOString(), description }, now);
-    const sector = ransomwareSector(description);
-    out.push({
-      id: `rl-${slug(p.group_name)}-${slug(title)}`,
+    const domain = v.website || (/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(v.title) ? v.title.toLowerCase() : null);
+    const { code, source } = v.country && COUNTRIES[v.country]
+      ? { code: v.country, source: 'déclarée' }
+      : locateRansom(domain, toText(v.rawDesc || ''));
+    const sector = SECTOR_OF_ACTIVITY.find(([re]) => re.test(v.activity || ''))?.[1] || ransomwareSector(description);
+    const { score, level, factors } = scoreRansomware({ date: v.date.toISOString(), description, sector }, now);
+    const viaLook = v.feeds.includes('RansomLook');
+    return {
+      id: `rl-${slug(v.group)}-${slug(v.title)}`,
       type: 'ransomware',
-      title,
+      title: v.title,
       domain,
-      group: p.group_name,
-      breachDate: date.toISOString().slice(0, 10),
-      addedDate: date.toISOString(),
+      group: v.group,
+      breachDate: v.date.toISOString().slice(0, 10),
+      addedDate: v.date.toISOString(),
       count: null,
       size: factors.find((f) => f.k === 'rwSize')?.v || null,
       classes: ['Ransomware claim', ...(sector ? [`${sector} sector`] : [])],
-      description: description === title ? '' : description,
-      disclosureUrl: `https://www.ransomlook.io/group/${encodeURIComponent(p.group_name)}`,
+      description: description === v.title ? '' : description,
+      disclosureUrl: viaLook
+        ? `https://www.ransomlook.io/group/${encodeURIComponent(v.group)}`
+        : `https://www.ransomware.live/group/${encodeURIComponent(v.group)}`,
+      feeds: [...new Set(v.feeds)],
+      sector: v.activity || null,
       verified: false,
       country: code,
       countrySource: source,
       score, level, factors,
-    });
-  }
-  return out;
+    };
+  });
 }
 
 function parseCsv(text) {
@@ -152,12 +184,20 @@ const usDate = (s) => {
   return m ? `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}` : null;
 };
 
-// Notifications officielles déposées auprès des procureurs généraux de Californie et de Washington.
+// Registre du ministère de la Justice de l'Oregon : tableau HTML (organisation, dates, personnes touchées).
+function parseOregon(html) {
+  const cells = (row) => [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => toText(m[1]));
+  return [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map((m) => cells(m[1])).filter((c) => c.length >= 6)
+    .map(([name, reported, breachDates, , , affected]) => ({ name, reported: usDate(reported), breach: usDate(breachDates), count: Number(String(affected).replace(/\D/g, '')) || null }));
+}
+
+// Notifications officielles déposées auprès des procureurs généraux de Californie, de Washington et de l'Oregon.
 async function buildOfficial() {
   const sinceDay = SINCE.toISOString().slice(0, 10);
-  const [caCsv, wa] = await Promise.all([
+  const [caCsv, wa, or] = await Promise.all([
     get('https://oag.ca.gov/privacy/databreach/list-export'),
     get(`https://data.wa.gov/resource/sb4j-ca4h.json?$limit=5000&$where=datesubmitted>='${sinceDay}'`, 'json'),
+    get('https://justice.oregon.gov/consumer/DataBreach/').then(parseOregon).catch((e) => { console.warn(`⚠ Oregon indisponible : ${e.message}`); return []; }),
   ]);
   const byOrg = new Map();
   for (const [name, breachDates, reported] of parseCsv(caCsv).slice(1)) {
@@ -176,6 +216,15 @@ async function buildOfficial() {
     rec.sector = r.industrytype;
     rec.attackType = r.cyberattacktype || r.databreachcause;
     if (r.datesubmitted.slice(0, 10) > rec.addedDay) rec.addedDay = r.datesubmitted.slice(0, 10);
+    byOrg.set(key, rec);
+  }
+  for (const r of or) {
+    if (!r.name || !r.reported || r.reported < sinceDay) continue;
+    const key = orgKey(r.name);
+    const rec = byOrg.get(key) || { name: r.name.trim(), addedDay: r.reported, breachDay: r.breach && r.breach > '2001-01-01' ? r.breach : r.reported, states: [] };
+    if (!rec.states.includes('OR')) rec.states.push('OR');
+    if (r.count) rec.count = Math.max(rec.count || 0, r.count);
+    if (r.reported > rec.addedDay) rec.addedDay = r.reported;
     byOrg.set(key, rec);
   }
   const now = Date.now();
@@ -199,7 +248,7 @@ async function buildOfficial() {
       description: '', // rédigée dans la langue du visiteur à partir de authorities/attackType
       disclosureUrl: r.states.includes('CA')
         ? `https://oag.ca.gov/privacy/databreach/list?field_sb24_org_name_value=${encodeURIComponent(r.name)}`
-        : 'https://www.atg.wa.gov/data-breach-notifications',
+        : r.states.includes('WA') ? 'https://www.atg.wa.gov/data-breach-notifications' : 'https://justice.oregon.gov/consumer/DataBreach/',
       verified: true,
       country: 'US',
       countrySource: 'notification officielle',
@@ -248,9 +297,52 @@ async function buildNews() {
   return news.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 80);
 }
 
+// Fuites signalées par la presse spécialisée. Les flux RSS ne gardent que les derniers articles :
+// on repart des incidents publiés lors du déploiement précédent pour couvrir toute la fenêtre.
+const PRESS_FEEDS = new Set(['DataBreaches.net']);
+// Article consacré à une fuite précise (et non une revue hebdomadaire ou une faille logicielle).
+const PRESS_WORDS = /data breach|breach (at|of|hits|exposes|impacts)|(customer|patient|personal|user) data|stolen data|data (leak|theft)|leaked (data|records|database)|records exposed|fuite de données|données (personnelles|clients|de clients|de patients)|piratage (de|des|d)|cyberattaque (contre|chez|vise|frappe)|ransomware attack|extortion/i;
+const PRESS_EXCLUDE = /ThreatsDay|weekly recap|week in review|patch tuesday|roundup|zero-day|vulnerabilit|faille/i;
+const hashId = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return (h >>> 0).toString(36); };
+
+async function buildPress(news) {
+  const previous = SITE_URL ? await get(`${SITE_URL}/data/presse-archive.json`, 'json').catch(() => []) : [];
+  const now = Date.now();
+  const fresh = news
+    .filter((n) => !n.alert && !PRESS_EXCLUDE.test(n.title) && (PRESS_FEEDS.has(n.source) || PRESS_WORDS.test(`${n.title} ${n.summary}`)))
+    .map((n) => {
+      const text = `${n.title}. ${n.summary}`;
+      // Les articles citent souvent des pays tiers (attaquants, victimes multiples) : on ne localise
+      // que les articles francophones qui mentionnent explicitement la France.
+      const fr = n.lang === 'fr' && /France|français|française/i.test(text);
+      const { code, source } = fr ? { code: 'FR', source: 'description' } : { code: null, source: null };
+      const { score, level, factors } = scorePress({ date: n.date, text }, now);
+      return {
+        id: `pr-${hashId(n.url)}`,
+        type: 'presse',
+        title: n.title,
+        domain: null,
+        outlet: n.source,
+        lang: n.lang,
+        breachDate: n.date.slice(0, 10),
+        addedDate: n.date,
+        count: null,
+        classes: ['Press report'],
+        description: n.summary,
+        disclosureUrl: n.url,
+        verified: false,
+        country: code,
+        countrySource: source,
+        score, level, factors,
+      };
+    });
+  const byId = new Map([...previous, ...fresh].map((b) => [b.id, b]));
+  return [...byId.values()].filter((b) => new Date(b.addedDate) >= SINCE).slice(0, 2000);
+}
+
 const xmlEscape = (s) => String(s).replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' })[c]);
 
-const RSS_TYPES = { hibp: 'fuite confirmée', ransomware: 'rançongiciel', officiel: 'notification officielle' };
+const RSS_TYPES = { hibp: 'fuite confirmée', ransomware: 'rançongiciel', officiel: 'notification officielle', presse: 'presse' };
 
 // Flux RSS des fuites critiques/élevées pour s'abonner aux alertes.
 function buildRss(breaches) {
@@ -278,17 +370,18 @@ console.log('Collecte :');
 const [hibp, ransomware, official, news] = await Promise.all([
   collect('Have I Been Pwned', buildBreaches),
   collect('RansomLook (rançongiciels)', buildRansomware),
-  collect('Notifications officielles (CA, WA)', buildOfficial),
+  collect('Notifications officielles (CA, WA, OR)', buildOfficial),
   buildNews(),
 ]);
-const breaches = [...hibp, ...ransomware, ...official].sort((a, b) => b.addedDate.localeCompare(a.addedDate));
+const press = await collect('Presse spécialisée', () => buildPress(news));
+const breaches = [...hibp, ...ransomware, ...official, ...press].sort((a, b) => b.addedDate.localeCompare(a.addedDate));
 // Ne jamais publier un site vide si toutes les sources sont tombées.
 if (!breaches.length) throw new Error('Aucune donnée collectée, déploiement annulé.');
 
 // Une même organisation peut apparaître dans plusieurs sources : on garde une ligne
 // principale (fuite confirmée > notification officielle > rançongiciel, puis score)
 // et on rattache les autres signalements à celle-ci.
-const TYPE_RANK = { hibp: 0, officiel: 1, ransomware: 2 };
+const TYPE_RANK = { hibp: 0, officiel: 1, ransomware: 2, presse: 3 };
 const groups = new Map();
 for (const b of breaches) {
   const key = orgKey(b.title.replace(/\(.*?\)/g, ''));
@@ -314,7 +407,7 @@ for (const b of breaches) {
 // Tendance : incidents rendus publics par semaine (lundi) et par source.
 const monday = (d) => { const x = new Date(d); x.setUTCHours(0, 0, 0, 0); x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7)); return x.toISOString().slice(0, 10); };
 const weekly = {};
-for (let t = SINCE.getTime(); t <= Date.now(); t += 7 * 86400000) weekly[monday(t)] = { hibp: 0, ransomware: 0, officiel: 0 };
+for (let t = SINCE.getTime(); t <= Date.now(); t += 7 * 86400000) weekly[monday(t)] = { hibp: 0, ransomware: 0, officiel: 0, presse: 0 };
 for (const b of breaches) if (!b.dup && weekly[monday(b.addedDate)]) weekly[monday(b.addedDate)][b.type]++;
 
 const meta = {
@@ -325,17 +418,17 @@ const meta = {
   merged,
   critical: breaches.filter((b) => b.level === 'critique').length,
   accountsHibp: hibp.reduce((s, b) => s + (b.count || 0), 0),
-  byType: { hibp: hibp.length, ransomware: ransomware.length, officiel: official.length },
+  byType: { hibp: hibp.length, ransomware: ransomware.length, officiel: official.length, presse: press.length },
   located: breaches.filter((b) => b.country).length,
   weekly: Object.entries(weekly).map(([week, v]) => ({ week, ...v })),
-  sources: ['Have I Been Pwned (CC BY 4.0)', 'RansomLook (AGPL-3.0)', 'California OAG', 'Washington AGO (data.wa.gov)', ...FEEDS.map((f) => f.name)],
+  sources: ['Have I Been Pwned (CC BY 4.0)', 'RansomLook (AGPL-3.0)', 'ransomware.live', 'California OAG', 'Washington AGO (data.wa.gov)', 'Oregon DOJ', ...FEEDS.map((f) => f.name)],
 };
 
 // Chargement rapide : un index léger par source, et le détail (description, calcul
 // du score) réparti en 64 fichiers chargés seulement à l'ouverture d'une fiche.
 const DETAIL_KEYS = ['description', 'factors', 'disclosureUrl', 'attackType'];
 const shards = Array.from({ length: SHARDS }, () => ({}));
-const index = { hibp: [], ransomware: [], officiel: [] };
+const index = { hibp: [], ransomware: [], officiel: [], presse: [] };
 for (const b of breaches) {
   const light = {};
   for (const [k, v] of Object.entries(b)) if (!DETAIL_KEYS.includes(k) && v != null && v !== false) light[k] = v;
@@ -349,6 +442,7 @@ for (const [type, list] of Object.entries(index)) await writeFile(join(OUT, `ind
 await Promise.all(shards.map((s, i) => writeFile(join(OUT, 'details', `${i}.json`), JSON.stringify(s))));
 await writeFile(join(OUT, 'countries.json'), JSON.stringify(Object.values(byCountry)));
 await writeFile(join(OUT, 'news.json'), JSON.stringify(news));
+await writeFile(join(OUT, 'presse-archive.json'), JSON.stringify(press));
 await writeFile(join(OUT, 'meta.json'), JSON.stringify(meta));
 await writeFile(join(ROOT, 'public', 'feed.xml'), buildRss(breaches));
 const pages = await writePages(breaches, { root: join(ROOT, 'public'), siteUrl: SITE_URL });

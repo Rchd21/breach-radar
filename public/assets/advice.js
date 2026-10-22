@@ -30,13 +30,14 @@ export const CLASS_FR = {
   'Occupations': 'Professions', 'Customer service records': 'Échanges service client', 'Payment methods': 'Moyens de paiement',
   'Recovery email addresses': 'E-mails de récupération', 'Login histories': 'Historiques de connexion',
   'Ransomware claim': 'Données internes volées (revendication)', 'Official notification': 'Notification officielle',
-  'Health sector': 'Secteur santé', 'Financial sector': 'Secteur financier',
+  'Health sector': 'Secteur santé', 'Financial sector': 'Secteur financier', 'Press report': 'Signalée par la presse',
 };
 
 export const TYPES = {
   hibp: { label: 'Fuites confirmées', short: 'Fuite confirmée', source: 'Have I Been Pwned' },
   ransomware: { label: 'Rançongiciels', short: 'Rançongiciel', source: 'RansomLook' },
-  officiel: { label: 'Notifications officielles', short: 'Notification officielle', source: 'Procureurs généraux (CA, WA)' },
+  officiel: { label: 'Notifications officielles', short: 'Notification officielle', source: 'Procureurs généraux (CA, WA, OR)' },
+  presse: { label: 'Presse', short: 'Presse', source: 'Presse spécialisée' },
 };
 export const fr = (c) => CLASS_FR[c] || c;
 
@@ -168,6 +169,18 @@ export const ADVICE = [
       'Vérifiez vos relevés bancaires et de remboursements santé des prochains mois.',
     ],
     links: [{ label: 'Gel de crédit (FTC)', url: 'https://consumer.ftc.gov/articles/what-know-about-credit-freezes-fraud-alerts' }, L.cyber],
+  },
+  {
+    id: 'presse', priority: 2, icon: '📰', title: 'Fuite signalée par la presse',
+    match: ['Press report'],
+    urgency: 'Vigilance',
+    steps: [
+      'Lisez l’article pour savoir quelles données et quels clients sont concernés.',
+      'Si vous avez un compte chez cette organisation, changez son mot de passe et activez la double authentification.',
+      'Attendez-vous à des e-mails, SMS ou appels frauduleux qui exploitent cette fuite : ne cliquez sur aucun lien.',
+      'Surveillez la communication officielle de l’organisation, qui doit informer les personnes touchées.',
+    ],
+    links: [L.cyber, L.cyber17],
   },
   {
     id: 'contact', priority: 3, icon: '📱', title: 'Téléphone et adresse postale exposés',

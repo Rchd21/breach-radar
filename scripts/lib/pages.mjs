@@ -24,7 +24,7 @@ function page(b, siteUrl) {
   const title = `${b.title} : fuite de données (sévérité ${LEVEL[b.level]} ${b.score}/100) — Breach Radar`;
   const summary = b.type === 'hibp'
     ? `${TYPE[b.type]}${volume}. Données exposées : ${b.classes.slice(0, 6).map((c) => CLASS_FR[c] || c).join(', ').toLowerCase()}. Que faire si vous êtes concerné.`
-    : `${TYPE[b.type]} auprès du procureur général de ${b.authorities.map((s) => ({ CA: 'Californie', WA: 'Washington' })[s]).join(' et de ')}${volume}. Que faire si vous êtes concerné.`;
+    : `${TYPE[b.type]} auprès du procureur général de ${b.authorities.map((s) => ({ CA: 'Californie', WA: 'Washington', OR: 'Oregon' })[s]).join(' et de ')}${volume}. Que faire si vous êtes concerné.`;
   return `<!doctype html>
 <html lang="fr">
 <head>
@@ -59,7 +59,8 @@ export async function writePages(breaches, { root, siteUrl = '' }) {
   const dir = join(root, 'i');
   await rm(dir, { recursive: true, force: true });
   await mkdir(dir, { recursive: true });
-  const listed = breaches.filter((b) => b.type !== 'ransomware' && !b.dup);
+  // Pas de page pour les revendications non confirmées ni pour les articles de presse (contenu de tiers).
+  const listed = breaches.filter((b) => (b.type === 'hibp' || b.type === 'officiel') && !b.dup);
   await Promise.all(listed.map((b) => writeFile(join(dir, pageName(b.id)), page(b, siteUrl))));
 
   const urls = [`${siteUrl}/`, `${siteUrl}/?lang=en`, `${siteUrl}/mentions-legales.html`, ...listed.map((b) => `${siteUrl}/i/${pageName(b.id)}`)];

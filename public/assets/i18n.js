@@ -16,7 +16,7 @@ export function setLang(l) {
 }
 
 const nf = new Intl.NumberFormat(locale);
-const STATE_NAMES = { fr: { CA: 'Californie', WA: 'Washington' }, en: { CA: 'California', WA: 'Washington' } };
+const STATE_NAMES = { fr: { CA: 'Californie', WA: 'Washington', OR: 'Oregon' }, en: { CA: 'California', WA: 'Washington', OR: 'Oregon' } };
 
 const UI = {
   fr: {
@@ -57,12 +57,13 @@ const UI = {
     actTitle: 'Guide de réponse', actSub: 'Actions recommandées selon le type de données exposées', hotlinesTitle: 'Contacts utiles (France)',
     hotlines: '<li><b>17Cyber</b> — assistance cyber en ligne 24 h/24 · <a href="https://www.17cyber.gouv.fr/" target="_blank" rel="noopener">17cyber.gouv.fr</a></li><li><b>Opposition carte bancaire</b> — 0 892 705 705</li><li><b>Info Escroqueries</b> — 0 805 805 817 (gratuit)</li><li><b>SMS frauduleux</b> — transférer au 33700</li><li><b>CNIL</b> — <a href="https://www.cnil.fr/fr/plaintes" target="_blank" rel="noopener">déposer une plainte</a> si l’organisme ne vous a pas informé</li>',
     newsTitle: 'Veille et alertes', newsSub: 'Presse spécialisée et alertes CERT-FR, mises à jour toutes les 3 heures',
+    frenchbreaches: 'Pour les fuites touchant la France, consultez aussi <a href="https://frenchbreaches.com/" target="_blank" rel="noopener">FrenchBreaches</a>, un site spécialisé indépendant.',
     footerAbout: 'Observatoire indépendant des fuites de données, alimenté par des sources publiques et mis à jour automatiquement.',
     disclaimer: 'Informations fournies à titre indicatif, sans garantie d’exhaustivité. Aucune donnée personnelle issue des fuites n’est hébergée.',
     methodTitle: 'Méthode du score (0-100)',
     methodText: '<p>Sensibilité de la donnée la plus critique exposée (jusqu’à 50) + volume de comptes (jusqu’à 25) + récence (jusqu’à 15) ± indicateurs (logiciel espion, fuite sensible, non vérifiée, fabriquée). Sans détail des données (rançongiciels, notifications), la sensibilité est estimée d’après le secteur et le volume d’après la taille annoncée ou le nombre de personnes notifiées. <b>Critique</b> ≥ 75 · <b>Élevé</b> ≥ 55 · <b>Modéré</b> ≥ 35 · <b>Faible</b> &lt; 35.</p><p>Localisation : estimée à partir du domaine et de la description ; certaines fuites ne sont pas localisables.</p>',
     sourcesTitle: 'Sources',
-    sourcesText: '<p>Fuites confirmées : <a href="https://haveibeenpwned.com/" target="_blank" rel="noopener">Have I Been Pwned</a> (CC BY 4.0). Rançongiciels : <a href="https://www.ransomlook.io/" target="_blank" rel="noopener">RansomLook</a> (revendications non confirmées, aucun lien vers les sites criminels). Notifications officielles : procureurs généraux de <a href="https://oag.ca.gov/privacy/databreach/list" target="_blank" rel="noopener">Californie</a> et de <a href="https://data.wa.gov/" target="_blank" rel="noopener">Washington</a>. Actualités : DataBreaches.net, ZATAZ, BleepingComputer, The Hacker News, The Register, CERT-FR. Fenêtre glissante des 6 derniers mois, mise à jour automatiquement toutes les 3 heures.</p><p>Ce site n’héberge aucune donnée personnelle issue des fuites.</p>',
+    sourcesText: '<p>Fuites confirmées : <a href="https://haveibeenpwned.com/" target="_blank" rel="noopener">Have I Been Pwned</a> (CC BY 4.0). Rançongiciels : <a href="https://www.ransomlook.io/" target="_blank" rel="noopener">RansomLook</a> et <a href="https://www.ransomware.live/" target="_blank" rel="noopener">ransomware.live</a> (revendications non confirmées, aucun lien vers les sites criminels). Notifications officielles : procureurs généraux de <a href="https://oag.ca.gov/privacy/databreach/list" target="_blank" rel="noopener">Californie</a>, de <a href="https://data.wa.gov/" target="_blank" rel="noopener">Washington</a> et de l’<a href="https://justice.oregon.gov/consumer/DataBreach/" target="_blank" rel="noopener">Oregon</a>. Presse : articles consacrés à une fuite, avec lien vers la source. Actualités : DataBreaches.net, ZATAZ, BleepingComputer, The Hacker News, The Register, CERT-FR. Fenêtre glissante des 6 derniers mois, mise à jour automatiquement toutes les 3 heures.</p><p>Ce site n’héberge aucune donnée personnelle issue des fuites.</p>',
     close: 'Fermer',
     updated: (ago) => `Données mises à jour il y a ${ago}`,
     statWindow: (n) => `Incidents recensés (${n} mois)`, statCrit: 'Incidents critiques',
@@ -70,12 +71,13 @@ const UI = {
     mapNote: (a, b) => `${a} fuites localisées sur ${b} affichées. La localisation est estimée (domaine national, siège connu ou description) ; les autres restent consultables dans la liste.`,
     seeAll: (n) => `Voir les ${n} fuites →`, noneForFilters: 'Aucune fuite pour ces filtres.', noResults: 'Aucun résultat.',
     resultCount: (n, s) => `${n} incidents · ${s} comptes ou personnes recensés`,
-    volUnknown: 'Volume inconnu', volClaimed: (s) => `${s} revendiqués`, accounts: 'comptes', peopleWa: 'pers. (WA)',
-    peopleWaLong: 'résidents de l’État de Washington touchés (minimum)',
+    volUnknown: 'Volume inconnu', volClaimed: (s) => `${s} revendiqués`, accounts: 'comptes', peopleWa: 'pers.',
+    peopleWaLong: 'personnes touchées (au moins, résidents des États déclarants)',
     group: (g) => `Groupe ${g}`, notifiedTo: (s) => `Notifiée : ${s}`,
     criticality: (l) => `Sévérité : ${l}`, estimation: (s) => `estimation : ${s}`,
     scoreTitle: 'Score de sévérité', factsTitle: 'Informations clés', fType: 'Source', fVolume: 'Volume', fCountry: 'Pays', fStatus: 'Statut',
-    countrySources: { 'référence': 'siège connu', domaine: 'domaine', description: 'description', 'notification officielle': 'notification officielle' },
+    countrySources: { 'référence': 'siège connu', domaine: 'domaine', description: 'description', 'notification officielle': 'notification officielle', 'déclarée': 'indiqué par la source' },
+    warnPress: (o) => `Incident rapporté par <b>${o}</b>. Les informations proviennent de l’article et n’ont pas été vérifiées par Breach Radar.`,
     warnRansom: (g) => `Revendication du groupe <b>${g}</b> sur son site de fuite : elle n’est pas confirmée par la victime et ne précise pas toujours les données volées.`,
     claimedOn: 'Revendiqué le', breachOn: 'Date de l’incident', publishedOn: 'Rendu public le', sector: 'Secteur', verified: 'Vérifiée', unverified: 'Non vérifiée',
     sectors: { Health: 'Santé', Financial: 'Finance', Government: 'Secteur public', Education: 'Éducation', Retail: 'Commerce', Business: 'Entreprises', 'Non-Profit/Charity': 'Associatif' },
@@ -83,7 +85,7 @@ const UI = {
     beVigilant: 'Restez vigilant face au phishing.',
     descTitle: (src, en) => `Description (source ${src}${en ? ', en anglais' : ''})`, noDesc: 'Aucune description publiée.',
     offDesc: (states, cause) => `Fuite notifiée au procureur général de ${states.join(' et de ')}${cause ? ` (cause déclarée : ${cause})` : ''}.`,
-    hibpPage: 'Fiche Have I Been Pwned', disclosure: { hibp: 'Communiqué officiel', ransomware: (g) => `Groupe ${g} sur RansomLook`, officiel: 'Registre officiel' },
+    hibpPage: 'Fiche Have I Been Pwned', disclosure: { hibp: 'Communiqué officiel', ransomware: (g) => `Fiche du groupe ${g}`, officiel: 'Registre officiel', presse: 'Lire l’article' },
     checkEmail: 'Vérifier mon e-mail',
     noneKnown: 'Aucune fuite connue pour ces services.', watchAlert: (n) => `${n} fuite(s) récente(s) touchent vos services`,
     whatToDoBtn: 'Voir les recommandations', remove: (w) => `Retirer ${w}`,
@@ -92,9 +94,10 @@ const UI = {
     newsAll: 'Tout', newsAlert: 'Alertes CERT-FR', newsFr: 'En français', newsEn: 'En anglais', noNews: 'Aucune actualité.',
     levels: { critique: 'Critique', eleve: 'Élevé', modere: 'Modéré', faible: 'Faible' },
     types: {
-      hibp: ['Fuites confirmées', 'Fuite confirmée'], ransomware: ['Rançongiciels', 'Rançongiciel'], officiel: ['Notifications officielles', 'Notification officielle'],
+      hibp: ['Fuites confirmées', 'Fuite confirmée'], ransomware: ['Rançongiciels', 'Rançongiciel'], officiel: ['Notifications officielles', 'Notification officielle'], presse: ['Presse', 'Presse'],
     },
-    typeSources: { hibp: 'Have I Been Pwned', ransomware: 'RansomLook', officiel: 'procureurs généraux (CA, WA)' },
+    typeSources: { hibp: 'Have I Been Pwned', ransomware: 'RansomLook / ransomware.live', officiel: 'procureurs généraux (CA, WA, OR)', presse: 'presse spécialisée' },
+    statPress: 'Signalées par la presse',
     factors: {
       topClass: (c) => `Donnée la plus sensible : ${c}`, pwdPlain: 'Mots de passe en clair', pwdWeak: 'Mots de passe faiblement chiffrés',
       pwdHashed: 'Mots de passe chiffrés (bcrypt…)', pwdExposed: 'Mots de passe exposés', accounts: (n) => `Volume : ${nf.format(n)} comptes`,
@@ -105,6 +108,7 @@ const UI = {
       rwSector: (s) => (s === 'Health' ? 'Secteur santé probable' : 'Secteur financier probable'), rwUnconfirmed: 'Revendication non confirmée par la victime',
       offSector: (s) => `${{ Health: 'Secteur santé', Financial: 'Secteur financier', Government: 'Secteur public', Education: 'Secteur éducation' }[s] || 'Données personnelles notifiées'} (fuite notifiée aux autorités)`,
       people: (n) => `Volume : ${nf.format(n)} personnes (au moins)`, volumeUnpublished: 'Volume non publié', attack: (t) => `Attaque : ${t}`,
+      pressReport: 'Fuite rapportée par un média spécialisé', pressSensitive: 'Données sensibles évoquées (banque, santé, identité, mots de passe)',
     },
     ago: { min: 'min', h: 'h', d: 'j' },
   },
@@ -146,12 +150,13 @@ const UI = {
     actTitle: 'Response guide', actSub: 'Recommended actions by type of exposed data', hotlinesTitle: 'Useful contacts (France)',
     hotlines: '<li><b>17Cyber</b> — 24/7 online cyber assistance: <a href="https://www.17cyber.gouv.fr/" target="_blank" rel="noopener">17cyber.gouv.fr</a></li><li><b>Card blocking (France)</b> — +33 892 705 705</li><li><b>Info Escroqueries</b> — 0 805 805 817 (free, from France)</li><li><b>Scam texts</b> — forward to 33700 (French numbers)</li><li><b>CNIL</b> — <a href="https://www.cnil.fr/fr/plaintes" target="_blank" rel="noopener">file a complaint</a> if the organisation did not inform you</li><li>Outside France: contact your bank, your national cybercrime reporting service and your data protection authority.</li>',
     newsTitle: 'Intelligence and alerts', newsSub: 'Specialist press and CERT-FR alerts, refreshed every 3 hours',
+    frenchbreaches: 'For breaches affecting France, see also <a href="https://frenchbreaches.com/" target="_blank" rel="noopener">FrenchBreaches</a>, an independent specialist site.',
     footerAbout: 'Independent data breach observatory, built on public sources and updated automatically.',
     disclaimer: 'Information provided for guidance only, with no guarantee of completeness. No personal data from breaches is hosted.',
     methodTitle: 'Scoring method (0-100)',
     methodText: '<p>Sensitivity of the most critical exposed data (up to 50) + number of accounts (up to 25) + recency (up to 15) ± indicators (infostealer malware, sensitive breach, unverified, fabricated). When the data types are unknown (ransomware, notifications), sensitivity is estimated from the sector and volume from the claimed size or number of people notified. <b>Critical</b> ≥ 75 · <b>High</b> ≥ 55 · <b>Moderate</b> ≥ 35 · <b>Low</b> &lt; 35.</p><p>Location: estimated from the domain and description; some breaches cannot be located.</p>',
     sourcesTitle: 'Sources',
-    sourcesText: '<p>Confirmed breaches: <a href="https://haveibeenpwned.com/" target="_blank" rel="noopener">Have I Been Pwned</a> (CC BY 4.0). Ransomware: <a href="https://www.ransomlook.io/" target="_blank" rel="noopener">RansomLook</a> (unconfirmed claims, no links to criminal sites). Official notifications: Attorneys General of <a href="https://oag.ca.gov/privacy/databreach/list" target="_blank" rel="noopener">California</a> and <a href="https://data.wa.gov/" target="_blank" rel="noopener">Washington</a>. News: DataBreaches.net, ZATAZ, BleepingComputer, The Hacker News, The Register, CERT-FR. Rolling 6-month window, updated automatically every 3 hours.</p><p>This site does not host any personal data from the breaches.</p>',
+    sourcesText: '<p>Confirmed breaches: <a href="https://haveibeenpwned.com/" target="_blank" rel="noopener">Have I Been Pwned</a> (CC BY 4.0). Ransomware: <a href="https://www.ransomlook.io/" target="_blank" rel="noopener">RansomLook</a> and <a href="https://www.ransomware.live/" target="_blank" rel="noopener">ransomware.live</a> (unconfirmed claims, no links to criminal sites). Official notifications: Attorneys General of <a href="https://oag.ca.gov/privacy/databreach/list" target="_blank" rel="noopener">California</a>, <a href="https://data.wa.gov/" target="_blank" rel="noopener">Washington</a> and <a href="https://justice.oregon.gov/consumer/DataBreach/" target="_blank" rel="noopener">Oregon</a>. Press: articles about a specific breach, linking to the source. News: DataBreaches.net, ZATAZ, BleepingComputer, The Hacker News, The Register, CERT-FR. Rolling 6-month window, updated automatically every 3 hours.</p><p>This site does not host any personal data from the breaches.</p>',
     close: 'Close',
     updated: (ago) => `Data updated ${ago} ago`,
     statWindow: (n) => `Incidents tracked (${n} months)`, statCrit: 'Critical incidents',
@@ -159,12 +164,13 @@ const UI = {
     mapNote: (a, b) => `${a} of ${b} displayed breaches are located. Location is estimated (national domain, known headquarters or description); the others are still listed below.`,
     seeAll: (n) => `See all ${n} breaches →`, noneForFilters: 'No breach for these filters.', noResults: 'No results.',
     resultCount: (n, s) => `${n} incidents · ${s} accounts or people recorded`,
-    volUnknown: 'Unknown volume', volClaimed: (s) => `${s} claimed`, accounts: 'accounts', peopleWa: 'people (WA)',
-    peopleWaLong: 'Washington State residents affected (minimum)',
+    volUnknown: 'Unknown volume', volClaimed: (s) => `${s} claimed`, accounts: 'accounts', peopleWa: 'people',
+    peopleWaLong: 'people affected (at least, residents of reporting states)',
     group: (g) => `${g} group`, notifiedTo: (s) => `Notified: ${s}`,
     criticality: (l) => `Severity: ${l}`, estimation: (s) => `estimated: ${s}`,
     scoreTitle: 'Severity score', factsTitle: 'Key facts', fType: 'Source', fVolume: 'Volume', fCountry: 'Country', fStatus: 'Status',
-    countrySources: { 'référence': 'known headquarters', domaine: 'domain', description: 'description', 'notification officielle': 'official notification' },
+    countrySources: { 'référence': 'known headquarters', domaine: 'domain', description: 'description', 'notification officielle': 'official notification', 'déclarée': 'reported by source' },
+    warnPress: (o) => `Incident reported by <b>${o}</b>. Details come from the article and have not been verified by Breach Radar.`,
     warnRansom: (g) => `Claimed by the <b>${g}</b> group on its leak site: not confirmed by the victim, and the stolen data is not always specified.`,
     claimedOn: 'Claimed on', breachOn: 'Incident date', publishedOn: 'Made public on', sector: 'Sector', verified: 'Verified', unverified: 'Unverified',
     sectors: { Health: 'Health', Financial: 'Finance', Government: 'Public sector', Education: 'Education', Retail: 'Retail', Business: 'Business', 'Non-Profit/Charity': 'Non-profit' },
@@ -172,7 +178,7 @@ const UI = {
     beVigilant: 'Stay alert to phishing.',
     descTitle: (src) => `Description (source: ${src})`, noDesc: 'No description published.',
     offDesc: (states, cause) => `Breach notified to the Attorney General of ${states.join(' and ')}${cause ? ` (reported cause: ${cause})` : ''}.`,
-    hibpPage: 'Have I Been Pwned page', disclosure: { hibp: 'Official statement', ransomware: (g) => `${g} group on RansomLook`, officiel: 'Official register' },
+    hibpPage: 'Have I Been Pwned page', disclosure: { hibp: 'Official statement', ransomware: (g) => `${g} group page`, officiel: 'Official register', presse: 'Read the article' },
     checkEmail: 'Check my email',
     noneKnown: 'No known breach for these services.', watchAlert: (n) => `${n} recent breach(es) affect your services`,
     whatToDoBtn: 'View guidance', remove: (w) => `Remove ${w}`,
@@ -181,9 +187,10 @@ const UI = {
     newsAll: 'All', newsAlert: 'CERT-FR alerts', newsFr: 'In French', newsEn: 'In English', noNews: 'No news.',
     levels: { critique: 'Critical', eleve: 'High', modere: 'Moderate', faible: 'Low' },
     types: {
-      hibp: ['Confirmed breaches', 'Confirmed breach'], ransomware: ['Ransomware', 'Ransomware'], officiel: ['Official notifications', 'Official notification'],
+      hibp: ['Confirmed breaches', 'Confirmed breach'], ransomware: ['Ransomware', 'Ransomware'], officiel: ['Official notifications', 'Official notification'], presse: ['Press', 'Press'],
     },
-    typeSources: { hibp: 'Have I Been Pwned', ransomware: 'RansomLook', officiel: 'Attorneys General (CA, WA)' },
+    typeSources: { hibp: 'Have I Been Pwned', ransomware: 'RansomLook / ransomware.live', officiel: 'Attorneys General (CA, WA, OR)', presse: 'specialist press' },
+    statPress: 'Reported by the press',
     factors: {
       topClass: (c) => `Most sensitive data: ${c}`, pwdPlain: 'Plain-text passwords', pwdWeak: 'Weakly hashed passwords',
       pwdHashed: 'Hashed passwords (bcrypt…)', pwdExposed: 'Passwords exposed', accounts: (n) => `Volume: ${nf.format(n)} accounts`,
@@ -194,6 +201,7 @@ const UI = {
       rwSector: (s) => (s === 'Health' ? 'Likely health sector' : 'Likely financial sector'), rwUnconfirmed: 'Claim not confirmed by the victim',
       offSector: (s) => `${{ Health: 'Health sector', Financial: 'Financial sector', Government: 'Public sector', Education: 'Education sector' }[s] || 'Personal data notified'} (reported to authorities)`,
       people: (n) => `Volume: ${nf.format(n)} people (at least)`, volumeUnpublished: 'Volume not published', attack: (t) => `Attack: ${t}`,
+      pressReport: 'Breach reported by a specialist outlet', pressSensitive: 'Sensitive data mentioned (banking, health, identity, passwords)',
     },
     ago: { min: 'min', h: 'h', d: 'd' },
   },
@@ -203,7 +211,7 @@ export const T = UI[lang];
 
 const CLASS_EN_EXTRA = {
   'Ransomware claim': 'Stolen internal data (claim)', 'Official notification': 'Official notification',
-  'Health sector': 'Health sector', 'Financial sector': 'Financial sector',
+  'Health sector': 'Health sector', 'Financial sector': 'Financial sector', 'Press report': 'Reported by the press',
 };
 export const cls = (c) => (lang === 'fr' ? CLASS_FR[c] || c : CLASS_EN_EXTRA[c] || c);
 export const stateNames = (codes) => codes.map((c) => STATE_NAMES[lang][c] || c);
@@ -258,6 +266,11 @@ const ADVICE_EN = {
     'Expect fraudulent emails or calls impersonating it (fake invoices, fake bank detail changes).',
     'Watch for official letters from the organisation: it must tell you if your data is affected.',
     'Never download data published by the attackers: it is illegal and often booby-trapped.'] },
+  presse: { title: 'Breach reported by the press', urgency: 'Stay alert', steps: [
+    'Read the article to find out which data and which customers are affected.',
+    'If you have an account with this organisation, change its password and turn on two-factor authentication.',
+    'Expect scam emails, texts or calls exploiting this breach: do not click any link.',
+    'Watch for the organisation’s official communication, which must inform the people affected.'] },
   officiel: { title: 'Breach reported to the authorities', urgency: 'Within 48 h', steps: [
     'Read the notification letter sent by the organisation: it states which data was affected.',
     'Enrol in the free monitoring services offered in the letter (credit or identity monitoring).',

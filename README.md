@@ -2,7 +2,7 @@
 
 Site public de suivi des fuites de données mondiales rendues publiques sur les **6 derniers mois** (fenêtre glissante, recalculée à chaque mise à jour ; modifiable avec la variable `WINDOW_MONTHS`) :
 
-- **Trois types de sources**, filtrables : fuites confirmées (Have I Been Pwned), victimes revendiquées par les groupes de rançongiciels (RansomLook), notifications officielles aux procureurs généraux de Californie et de Washington.
+- **Quatre types de sources**, filtrables : fuites confirmées (Have I Been Pwned), victimes revendiquées par les groupes de rançongiciels (RansomLook + ransomware.live, avec pays et secteur), notifications officielles (procureurs généraux de Californie, Washington, Oregon) et fuites signalées par la presse (conservées d'une mise à jour à l'autre via `data/presse-archive.json`).
 - **Score de criticité 0-100** pour chaque fuite (Critique / Élevé / Modéré / Faible), avec le détail du calcul.
 - **Carte mondiale** des organisations touchées, filtrable par niveau et par période.
 - **Conseils d’action** adaptés aux données exposées (carte bancaire, IBAN, pièce d’identité, mot de passe, santé…), avec les contacts utiles en France.

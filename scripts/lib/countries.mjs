@@ -78,7 +78,7 @@ export const DOMAIN_OVERRIDES = {
 
 // Mentions de pays dans les descriptions HIBP ("the French website...", "in Brazil", ...).
 const MENTIONS = [
-  ['FR', 'French|France|Paris'], ['DE', 'German|Germany'], ['RU', 'Russian|Russia'], ['CN', 'Chinese|China'],
+  ['FR', 'French|France|Paris|français|française|Français|Française|CNIL'], ['DE', 'German|Germany'], ['RU', 'Russian|Russia'], ['CN', 'Chinese|China'],
   ['IN', 'Indian|India'], ['BR', 'Brazilian|Brazil'], ['ID', 'Indonesian|Indonesia'], ['JP', 'Japanese|Japan'],
   ['KR', 'South Korean|Korean|South Korea'], ['VN', 'Vietnamese|Vietnam'], ['TH', 'Thai|Thailand'],
   ['MY', 'Malaysian|Malaysia'], ['PH', 'Filipino|Philippine|Philippines'], ['AU', 'Australian|Australia'],
