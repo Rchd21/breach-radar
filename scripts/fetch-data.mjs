@@ -38,7 +38,10 @@ function toText(html = '') {
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
     .replace(/<[^>]+>/g, '')
     .replace(/&(#x?[0-9a-f]+|\w+);/gi, (m, e) => {
-      if (e[0] === '#') return String.fromCodePoint(e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10));
+      if (e[0] === '#') {
+        const cp = e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+        return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : '';
+      }
       return ENTITIES[e.toLowerCase()] ?? m;
     })
     .replace(/\s+/g, ' ')

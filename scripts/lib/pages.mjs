@@ -30,6 +30,8 @@ function page(b, siteUrl) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="refresh" content="0; url=${esc(target)}">
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(summary)}">
 <link rel="canonical" href="${esc(url)}">
@@ -41,7 +43,6 @@ function page(b, siteUrl) {
 <meta property="og:image" content="${esc(`${siteUrl}/og.png`)}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="robots" content="index,follow">
-<script>location.replace(${JSON.stringify(target)});</script>
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:640px;margin:48px auto;padding:0 16px;color:#101828}a{color:#1d3fae}</style>
 </head>
 <body>
